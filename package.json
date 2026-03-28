@@ -1,0 +1,16 @@
+{
+  "name": "pilotgram",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Pilotgram — API FastAPI + Vite + Supabase",
+  "scripts": {
+    "bootstrap": "bash scripts/bootstrap.sh",
+    "dev": "concurrently -k -n api,web -c blue,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd backend && . .venv/bin/activate && uvicorn main:app --reload --host 127.0.0.1 --port 8765",
+    "dev:web": "cd web && npm run dev",
+    "build:web": "cd web && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

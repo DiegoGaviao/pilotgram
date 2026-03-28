@@ -1,0 +1,14 @@
+# Repositório independente (não misturar com leads-ai no Git).
+.DS_Store
+.venv/
+venv/
+**/.venv/
+
+backend/.env
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.venv/
+backend/data/
+web/node_modules/
+web/dist/
+web/.env

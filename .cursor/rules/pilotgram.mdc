@@ -1,0 +1,11 @@
+---
+description: Contexto Pilotgram — referência rápida e ficheiros-chave
+globs: "**/PILOTGRAM/**/*"
+alwaysApply: false
+---
+
+# Pilotgram (PG_*)
+
+- **Copiar/colar (SQL, env, Meta):** `PILOTGRAM/COPY_PASTE_PG.md` — quando o utilizador trabalhar neste produto, indica que pode **fixar esse ficheiro** num editor ao lado (`LEIA_PRIMEIRO.md` explica como).
+- **Convenção:** tabelas `pg_*`, env `PG_*` (Pilotgram); `LA_*` é Leads AI noutro projeto.
+- **Deploy:** `DEPLOY_DHAWK.md`.
