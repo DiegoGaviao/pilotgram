@@ -9,6 +9,7 @@ backend/__pycache__/
 backend/**/__pycache__/
 backend/.venv/
 backend/data/
-web/node_modules/
+# Qualquer node_modules (raiz = concurrently; web/ = Vite)
+node_modules/
 web/dist/
 web/.env
