@@ -236,6 +236,7 @@ export default function Dashboard() {
                     </div>
                     <div className="space-y-2 px-3 py-3">
                       <p className="text-xs text-slate-400">{s.focus_topic || "foco do perfil"}</p>
+                      <p className="text-xs font-medium text-emerald-300">Legenda pronta (copiar e postar):</p>
                       <p className="whitespace-pre-wrap text-slate-200">{s.suggestion_text}</p>
                     </div>
                   </div>

@@ -153,6 +153,26 @@ def _extract_keywords(media_items: list[dict[str, Any]], limit: int = 6) -> list
     return [k for k, _ in sorted(counts.items(), key=lambda x: x[1], reverse=True)[:limit]]
 
 
+def _tokens(text: str) -> list[str]:
+    return [
+        t
+        for t in re.findall(r"[a-zà-ú0-9_]{4,}", (text or "").lower())
+        if t not in _STOPWORDS and not t.startswith("http")
+    ]
+
+
+def _filter_media_by_focus(media_items: list[dict[str, Any]], focus_topic: str) -> list[dict[str, Any]]:
+    focus = set(_tokens(focus_topic))
+    if not focus:
+        return media_items
+    filtered: list[dict[str, Any]] = []
+    for m in media_items:
+        caption_tokens = set(_tokens(str(m.get("caption") or "")))
+        if focus.intersection(caption_tokens):
+            filtered.append(m)
+    return filtered or media_items
+
+
 def _best_cta(media_items: list[dict[str, Any]]) -> str:
     ranked = sorted(
         media_items,
@@ -190,7 +210,8 @@ def _build_suggestions_from_media(
         comments = float(row.get("comments_count") or 0)
         return (likes * 2.0) + (comments * 3.0)
 
-    ranked = sorted(media_items, key=score, reverse=True)
+    focused_media = _filter_media_by_focus(media_items, focus_topic)
+    ranked = sorted(focused_media, key=score, reverse=True)
     top = ranked[: max(1, count)]
     keywords = _extract_keywords(ranked, limit=6)
     tone_hint = str(dna.get("tone_hint")) if dna else _tone_hint(ranked)
@@ -214,25 +235,32 @@ def _build_suggestions_from_media(
         angle = angles[idx % len(angles)]
         focus = ", ".join(keywords[:3]) if keywords else "tema principal do perfil"
         day = base_date + timedelta(days=idx * interval_days)
+        hook = (
+            f"Se você sente que está travado em {focus_topic}, este ajuste simples pode virar o jogo."
+            if focus_topic
+            else f"Gancho: {anchor}"
+        )
+        cta_clean = cta_hint.replace("CTA:", "").strip()
+        hashtags = " ".join([f"#{t.replace(' ', '')}" for t in (focus_topic.split(",")[:3] if focus_topic else keywords[:3]) if t.strip()])
         suggestion_text = (
-            f"Ângulo: {angle}\n"
-            f"Foco do perfil: {focus_topic or focus}\n"
-            f"Gancho inspirado em post real: {anchor}\n"
-            f"Roteiro (Lead AI style): contexto -> dor específica -> micro-solução -> prova -> CTA.\n"
-            f"Formato sugerido: {post_type} adaptado para retenção (hook forte em 2 segundos).\n"
-            f"{tone_hint}\n"
-            f"{cta_hint}"
+            f"{hook}\n\n"
+            f"Você não precisa reinventar tudo. Comece com 1 ação prática hoje: escolha um hábito-chave, "
+            f"repita por 7 dias e registre o resultado.\n\n"
+            f"Exemplo real: {anchor}\n\n"
+            f"{cta_clean}\n\n"
+            f"{hashtags}"
         )
         creative_prompt = (
             f"Instagram post cover, niche {focus_topic or focus}, angle {angle}, "
             f"Brazilian audience, no text in image, clean composition, mobile-friendly, {post_type.lower()} style."
         )
-        creative_image_url = f"https://image.pollinations.ai/prompt/{quote_plus(creative_prompt)}"
+        seed = quote_plus(f"{ig_user_id}-{idx}-{focus_topic or focus}")
+        creative_image_url = f"https://picsum.photos/seed/{seed}/1080/1080"
         out.append(
             {
                 "source_media_id": str(m.get("id")) if m.get("id") else None,
                 "suggestion_text": suggestion_text,
-                "rationale": "Gerado com base em engajamento, palavras recorrentes e estilo dos melhores posts.",
+                "rationale": f"Tema: {focus_topic or focus} · Ângulo: {angle} · Formato: {post_type}.",
                 "creative_prompt": creative_prompt,
                 "creative_image_url": creative_image_url,
                 "suggested_date": day.isoformat(),
