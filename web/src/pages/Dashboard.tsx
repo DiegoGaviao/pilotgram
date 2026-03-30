@@ -59,6 +59,7 @@ export default function Dashboard() {
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [brokenImages, setBrokenImages] = useState<Record<number, true>>({});
   const [err, setErr] = useState<string | null>(null);
+  const needsReconnect = !!err && err.startsWith("401:");
 
   useEffect(() => {
     void (async () => {
@@ -315,7 +316,7 @@ export default function Dashboard() {
                 disabled={savingBrief}
                 className="mt-2 rounded bg-blue-700 px-3 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
               >
-                {savingBrief ? "Salvando..." : "Salvar questionário"}
+                {savingBrief ? "Atualizando..." : "Atualizar questionário"}
               </button>
             </div>
           )}
@@ -389,7 +390,16 @@ export default function Dashboard() {
           )}
 
           <h2 className="text-lg font-medium text-slate-200">Amostra de posts (API)</h2>
-          {err && <p className="text-xs text-amber-500">{err}</p>}
+          {err && (
+            <div className="space-y-1">
+              <p className="text-xs text-amber-500">{err}</p>
+              {needsReconnect && (
+                <Link to="/connect" className="text-xs text-emerald-400 hover:underline">
+                  Reconectar Meta agora
+                </Link>
+              )}
+            </div>
+          )}
           <ul className="space-y-3">
             {media.map((m, idx) => (
               <li
