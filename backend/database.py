@@ -40,6 +40,18 @@ CREATE TABLE IF NOT EXISTS profile_dna (
     cta_hint TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS profile_brief (
+    ig_user_id TEXT PRIMARY KEY,
+    niche TEXT NOT NULL,
+    target_audience TEXT NOT NULL,
+    objective TEXT NOT NULL,
+    offer_summary TEXT NOT NULL,
+    preferred_language TEXT NOT NULL,
+    tone_style TEXT NOT NULL,
+    do_not_use_terms TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -54,6 +66,7 @@ async def init_db() -> None:
         await db.executescript(SCHEMA)
         # Migração leve para ambientes que já tinham a tabela criada.
         await _ensure_content_suggestions_columns(db)
+        await _ensure_profile_brief_columns(db)
         await db.commit()
     if settings.use_supabase_for_token:
         logger.info("Token store: Supabase (pg_oauth_solo) + SQLite para robôs em %s", path)
@@ -139,6 +152,24 @@ async def _ensure_content_suggestions_columns(db: aiosqlite.Connection) -> None:
     for name, col_type in additions:
         if name not in cols:
             await db.execute(f"ALTER TABLE content_suggestions ADD COLUMN {name} {col_type}")
+
+
+async def _ensure_profile_brief_columns(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(profile_brief)") as cur:
+        cols = {str(row[1]) async for row in cur}
+    additions: list[tuple[str, str]] = [
+        ("niche", "TEXT NOT NULL DEFAULT ''"),
+        ("target_audience", "TEXT NOT NULL DEFAULT ''"),
+        ("objective", "TEXT NOT NULL DEFAULT ''"),
+        ("offer_summary", "TEXT NOT NULL DEFAULT ''"),
+        ("preferred_language", "TEXT NOT NULL DEFAULT ''"),
+        ("tone_style", "TEXT NOT NULL DEFAULT ''"),
+        ("do_not_use_terms", "TEXT NOT NULL DEFAULT ''"),
+        ("updated_at", "TEXT NOT NULL DEFAULT ''"),
+    ]
+    for name, col_type in additions:
+        if name not in cols:
+            await db.execute(f"ALTER TABLE profile_brief ADD COLUMN {name} {col_type}")
 
 
 async def save_content_suggestions(
@@ -321,4 +352,86 @@ async def get_profile_dna(ig_user_id: str) -> dict | None:
                 "tone_hint": str(row[2]),
                 "cta_hint": str(row[3]),
                 "updated_at": str(row[4]),
+            }
+
+
+async def upsert_profile_brief(
+    ig_user_id: str,
+    niche: str,
+    target_audience: str,
+    objective: str,
+    offer_summary: str,
+    preferred_language: str,
+    tone_style: str,
+    do_not_use_terms: str,
+) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(_db_path()) as db:
+        await db.execute(
+            """
+            INSERT INTO profile_brief (
+              ig_user_id, niche, target_audience, objective, offer_summary,
+              preferred_language, tone_style, do_not_use_terms, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ig_user_id) DO UPDATE SET
+              niche = excluded.niche,
+              target_audience = excluded.target_audience,
+              objective = excluded.objective,
+              offer_summary = excluded.offer_summary,
+              preferred_language = excluded.preferred_language,
+              tone_style = excluded.tone_style,
+              do_not_use_terms = excluded.do_not_use_terms,
+              updated_at = excluded.updated_at
+            """,
+            (
+                ig_user_id,
+                niche.strip(),
+                target_audience.strip(),
+                objective.strip(),
+                offer_summary.strip(),
+                preferred_language.strip(),
+                tone_style.strip(),
+                do_not_use_terms.strip(),
+                now,
+            ),
+        )
+        await db.commit()
+    return {
+        "ig_user_id": ig_user_id,
+        "niche": niche.strip(),
+        "target_audience": target_audience.strip(),
+        "objective": objective.strip(),
+        "offer_summary": offer_summary.strip(),
+        "preferred_language": preferred_language.strip(),
+        "tone_style": tone_style.strip(),
+        "do_not_use_terms": do_not_use_terms.strip(),
+        "updated_at": now,
+    }
+
+
+async def get_profile_brief(ig_user_id: str) -> dict | None:
+    async with aiosqlite.connect(_db_path()) as db:
+        async with db.execute(
+            """
+            SELECT ig_user_id, niche, target_audience, objective, offer_summary,
+                   preferred_language, tone_style, do_not_use_terms, updated_at
+            FROM profile_brief
+            WHERE ig_user_id = ?
+            """,
+            (ig_user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {
+                "ig_user_id": str(row[0]),
+                "niche": str(row[1]),
+                "target_audience": str(row[2]),
+                "objective": str(row[3]),
+                "offer_summary": str(row[4]),
+                "preferred_language": str(row[5]),
+                "tone_style": str(row[6]),
+                "do_not_use_terms": str(row[7]),
+                "updated_at": str(row[8]),
             }

@@ -33,6 +33,17 @@ type ProfileDna = {
   cta_hint: string;
   updated_at: string;
 };
+type ProfileBrief = {
+  ig_user_id: string;
+  niche: string;
+  target_audience: string;
+  objective: string;
+  offer_summary: string;
+  preferred_language: string;
+  tone_style: string;
+  do_not_use_terms: string;
+  updated_at: string;
+};
 
 export default function Dashboard() {
   const [pages, setPages] = useState<PageIg[] | null>(null);
@@ -40,24 +51,14 @@ export default function Dashboard() {
   const [media, setMedia] = useState<MediaRow[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
   const [dna, setDna] = useState<ProfileDna | null>(null);
+  const [brief, setBrief] = useState<ProfileBrief | null>(null);
   const [focusTopic, setFocusTopic] = useState("autoajuda, coaching, desenvolvimento pessoal");
   const [frequencyPerWeek, setFrequencyPerWeek] = useState(3);
   const [generating, setGenerating] = useState(false);
+  const [savingBrief, setSavingBrief] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [brokenImages, setBrokenImages] = useState<Record<number, true>>({});
   const [err, setErr] = useState<string | null>(null);
-  const fallbackCreative =
-    "data:image/svg+xml;utf8," +
-    encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080">
-        <rect width="100%" height="100%" fill="#0f172a"/>
-        <text x="50%" y="48%" dominant-baseline="middle" text-anchor="middle" fill="#e2e8f0" font-size="42" font-family="Arial, sans-serif">
-          Preview criativo
-        </text>
-        <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#94a3b8" font-size="28" font-family="Arial, sans-serif">
-          imagem temporariamente indisponível
-        </text>
-      </svg>`
-    );
 
   useEffect(() => {
     void (async () => {
@@ -81,20 +82,35 @@ export default function Dashboard() {
     }
     void (async () => {
       try {
-        const [res, sres, dres] = await Promise.all([
+        const [res, sres, dres, bres] = await Promise.all([
           api<{ data: MediaRow[] }>(`/api/v1/meta/ig/${selectedIg}/media-with-insights?limit=8`),
           api<{ data: SuggestionRow[] }>(`/api/v1/meta/ig/${selectedIg}/suggestions`),
           api<ProfileDna>(`/api/v1/meta/ig/${selectedIg}/dna`).catch(() => null),
+          api<ProfileBrief>(`/api/v1/meta/ig/${selectedIg}/brief`).catch(() => null),
         ]);
         setMedia(res.data);
         setSuggestions(sres.data);
         setDna(dres);
+        setBrief(
+          bres ?? {
+            ig_user_id: selectedIg,
+            niche: "",
+            target_audience: "",
+            objective: "",
+            offer_summary: "",
+            preferred_language: "",
+            tone_style: "",
+            do_not_use_terms: "",
+            updated_at: "",
+          }
+        );
         setErr(null);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
         setMedia([]);
         setSuggestions([]);
         setDna(null);
+        setBrief(null);
       }
     })();
   }, [selectedIg]);
@@ -118,6 +134,31 @@ export default function Dashboard() {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function saveBrief() {
+    if (!selectedIg || !brief) return;
+    setSavingBrief(true);
+    setErr(null);
+    try {
+      const saved = await api<ProfileBrief>(`/api/v1/meta/ig/${selectedIg}/brief`, {
+        method: "PUT",
+        body: JSON.stringify({
+          niche: brief.niche,
+          target_audience: brief.target_audience,
+          objective: brief.objective,
+          offer_summary: brief.offer_summary,
+          preferred_language: brief.preferred_language,
+          tone_style: brief.tone_style,
+          do_not_use_terms: brief.do_not_use_terms,
+        }),
+      });
+      setBrief(saved);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingBrief(false);
     }
   }
 
@@ -221,6 +262,63 @@ export default function Dashboard() {
               <p className="mt-1">{dna.cta_hint}</p>
             </div>
           )}
+          {brief && (
+            <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-300">
+              <p className="mb-2 font-medium text-slate-200">Questionário estratégico da página</p>
+              <div className="grid gap-2 md:grid-cols-2">
+                <input
+                  value={brief.niche}
+                  onChange={(e) => setBrief({ ...brief, niche: e.target.value })}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                  placeholder="Nicho (ex: liderança para empreendedoras)"
+                />
+                <input
+                  value={brief.target_audience}
+                  onChange={(e) => setBrief({ ...brief, target_audience: e.target.value })}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                  placeholder="Público-alvo"
+                />
+                <input
+                  value={brief.objective}
+                  onChange={(e) => setBrief({ ...brief, objective: e.target.value })}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                  placeholder="Objetivo principal"
+                />
+                <input
+                  value={brief.offer_summary}
+                  onChange={(e) => setBrief({ ...brief, offer_summary: e.target.value })}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                  placeholder="Oferta/serviço"
+                />
+                <input
+                  value={brief.preferred_language}
+                  onChange={(e) => setBrief({ ...brief, preferred_language: e.target.value })}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                  placeholder="Idioma preferido (en ou pt)"
+                />
+                <input
+                  value={brief.tone_style}
+                  onChange={(e) => setBrief({ ...brief, tone_style: e.target.value })}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                  placeholder="Tom (ex: direto, premium, acolhedor)"
+                />
+              </div>
+              <input
+                value={brief.do_not_use_terms}
+                onChange={(e) => setBrief({ ...brief, do_not_use_terms: e.target.value })}
+                className="mt-2 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                placeholder="Termos proibidos (separados por vírgula)"
+              />
+              <button
+                type="button"
+                onClick={() => void saveBrief()}
+                disabled={savingBrief}
+                className="mt-2 rounded bg-blue-700 px-3 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+              >
+                {savingBrief ? "Salvando..." : "Salvar questionário"}
+              </button>
+            </div>
+          )}
           {suggestions.length ? (
             <ul className="space-y-3">
               {suggestions.map((s) => (
@@ -240,7 +338,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="aspect-square bg-slate-950">
-                      {s.creative_image_url ? (
+                      {s.creative_image_url && !brokenImages[s.id] ? (
                         <img
                           src={s.creative_image_url}
                           alt="Criativo sugerido"
@@ -248,13 +346,13 @@ export default function Dashboard() {
                           loading="lazy"
                           referrerPolicy="no-referrer"
                           onError={(e) => {
-                            const target = e.currentTarget;
-                            if (target.src !== fallbackCreative) target.src = fallbackCreative;
+                            e.currentTarget.style.display = "none";
+                            setBrokenImages((prev) => ({ ...prev, [s.id]: true }));
                           }}
                         />
                       ) : (
-                        <div className="flex h-full items-center justify-center p-3 text-xs text-slate-500">
-                          sem criativo
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 text-center text-xs text-slate-300">
+                          Preview criativo indisponivel no host
                         </div>
                       )}
                     </div>

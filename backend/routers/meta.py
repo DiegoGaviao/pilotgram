@@ -20,12 +20,14 @@ from config import settings
 from database import (
     approve_content_suggestion,
     clear_solo_session,
+    get_profile_brief,
     get_profile_dna,
     get_solo_session_meta,
     get_solo_token,
     list_content_suggestions,
     save_content_suggestions,
     save_solo_token,
+    upsert_profile_brief,
     upsert_profile_dna,
 )
 from services import meta_graph as graph
@@ -94,6 +96,21 @@ class ProfileDnaResponse(BaseModel):
     themes: list[str]
     tone_hint: str
     cta_hint: str
+    updated_at: str
+
+
+class ProfileBriefBody(BaseModel):
+    niche: str = ""
+    target_audience: str = ""
+    objective: str = ""
+    offer_summary: str = ""
+    preferred_language: str = ""
+    tone_style: str = ""
+    do_not_use_terms: str = ""
+
+
+class ProfileBriefResponse(ProfileBriefBody):
+    ig_user_id: str
     updated_at: str
 
 
@@ -274,6 +291,7 @@ def _build_suggestions_from_media(
     frequency_per_week: int,
     focus_topic: str,
     dna: dict[str, Any] | None = None,
+    brief: dict[str, Any] | None = None,
 ) -> list[dict[str, str | None]]:
     def score(row: dict[str, Any]) -> float:
         likes = float(row.get("like_count") or 0)
@@ -283,7 +301,13 @@ def _build_suggestions_from_media(
     focused_media = _filter_media_by_focus(media_items, focus_topic)
     ranked = sorted(focused_media, key=score, reverse=True)
     top = ranked[: max(1, count)]
-    lang = _detect_language(ranked)
+    forced_lang = str((brief or {}).get("preferred_language") or "").strip().lower()
+    if forced_lang in {"en", "english"}:
+        lang = "en"
+    elif forced_lang in {"pt", "pt-br", "portuguese"}:
+        lang = "pt"
+    else:
+        lang = _detect_language(ranked)
     focus_topic = _normalize_focus_for_lang(focus_topic, lang)
     keywords = _extract_keywords(ranked, limit=6)
     tone_hint = str(dna.get("tone_hint")) if dna else _tone_hint(ranked)
@@ -301,6 +325,21 @@ def _build_suggestions_from_media(
     out: list[dict[str, str | None]] = []
     base_date = datetime.now(timezone.utc).replace(hour=14, minute=0, second=0, microsecond=0)
     interval_days = max(1, int(round(7 / max(1, frequency_per_week))))
+    niche = str((brief or {}).get("niche") or "").strip()
+    objective = str((brief or {}).get("objective") or "").strip()
+    target = str((brief or {}).get("target_audience") or "").strip()
+    tone_style = str((brief or {}).get("tone_style") or "").strip()
+    offer = str((brief or {}).get("offer_summary") or "").strip()
+    blocked_terms = [
+        t.strip().lower() for t in str((brief or {}).get("do_not_use_terms") or "").split(",") if t.strip()
+    ]
+
+    def clean_blocked(text: str) -> str:
+        out_text = text
+        for term in blocked_terms:
+            out_text = re.sub(rf"\b{re.escape(term)}\b", "", out_text, flags=re.IGNORECASE)
+        return re.sub(r"\s{2,}", " ", out_text).strip()
+
     for idx, m in enumerate(top):
         anchor = _short_caption(m.get("caption"))
         post_type = str(m.get("media_type") or "POST")
@@ -320,14 +359,18 @@ def _build_suggestions_from_media(
             focus_tags = " ".join(
                 [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
             )
+            audience_goal = f"Audience: {target}\nGoal: {objective}\n\n" if (target or objective) else ""
+            offer_line = f"Offer angle: {offer}\n\n" if offer else ""
             suggestion_text = (
                 f"{hook}\n\n"
                 f"{body}\n\n"
+                f"{audience_goal}"
                 f"{anchor_line}\n\n"
                 "Mini-structure for the caption:\n"
                 "1) Name the common mistake in one sentence.\n"
                 "2) Give a 3-step practical fix.\n"
                 "3) Ask for one concrete action in the comments.\n\n"
+                f"{offer_line}"
                 f"{cta_clean}\n\n"
                 f"{keyword_tags} {focus_tags}".strip()
             )
@@ -344,20 +387,26 @@ def _build_suggestions_from_media(
             focus_tags = " ".join(
                 [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
             )
+            audience_goal = f"Público: {target}\nObjetivo: {objective}\n\n" if (target or objective) else ""
+            offer_line = f"Gancho de oferta: {offer}\n\n" if offer else ""
             suggestion_text = (
                 f"{hook}\n\n"
                 f"{body}\n\n"
+                f"{audience_goal}"
                 f"{anchor_line}\n\n"
                 "Mini-roteiro da legenda:\n"
                 "1) Nomeie o erro comum em uma frase.\n"
                 "2) Entregue uma correção prática em 3 passos.\n"
                 "3) Peça uma ação objetiva nos comentários.\n\n"
+                f"{offer_line}"
                 f"{cta_clean}\n\n"
                 f"{keyword_tags} {focus_tags}".strip()
             )
+        suggestion_text = clean_blocked(suggestion_text)
         creative_prompt = (
-            f"Instagram post cover, niche {focus_topic or focus}, angle {angle}, "
+            f"Instagram post cover, niche {niche or focus_topic or focus}, angle {angle}, "
             f"{'English-speaking' if lang == 'en' else 'Brazilian Portuguese'} audience, "
+            f"{'tone ' + tone_style + ', ' if tone_style else ''}"
             f"no text in image, clean composition, mobile-friendly, {post_type.lower()} style."
         )
         img_label = f"{(focus_topic or focus)[:28]} | {angle[:24]}"
@@ -577,6 +626,7 @@ async def generate_suggestions(
         tone_hint=str(dna_input["tone_hint"]),
         cta_hint=str(dna_input["cta_hint"]),
     )
+    brief_saved = await get_profile_brief(ig_user_id)
     draft = _build_suggestions_from_media(
         ig_user_id,
         media,
@@ -584,6 +634,7 @@ async def generate_suggestions(
         frequency_per_week=frequency_per_week,
         focus_topic=focus_topic,
         dna=dna_saved,
+        brief=brief_saved,
     )
     saved = await save_content_suggestions(ig_user_id, draft)
     return SuggestionGenerateResponse(generated=len(saved), data=[SuggestionItem(**s) for s in saved])
@@ -601,6 +652,39 @@ async def get_dna(ig_user_id: str) -> ProfileDnaResponse:
     if not row:
         raise HTTPException(status_code=404, detail="DNA ainda não gerado para este perfil")
     return ProfileDnaResponse(**row)
+
+
+@router.put("/ig/{ig_user_id}/brief", response_model=ProfileBriefResponse)
+async def put_brief(ig_user_id: str, body: ProfileBriefBody) -> ProfileBriefResponse:
+    saved = await upsert_profile_brief(
+        ig_user_id=ig_user_id,
+        niche=body.niche,
+        target_audience=body.target_audience,
+        objective=body.objective,
+        offer_summary=body.offer_summary,
+        preferred_language=body.preferred_language,
+        tone_style=body.tone_style,
+        do_not_use_terms=body.do_not_use_terms,
+    )
+    return ProfileBriefResponse(**saved)
+
+
+@router.get("/ig/{ig_user_id}/brief", response_model=ProfileBriefResponse)
+async def get_brief(ig_user_id: str) -> ProfileBriefResponse:
+    row = await get_profile_brief(ig_user_id)
+    if not row:
+        return ProfileBriefResponse(
+            ig_user_id=ig_user_id,
+            niche="",
+            target_audience="",
+            objective="",
+            offer_summary="",
+            preferred_language="",
+            tone_style="",
+            do_not_use_terms="",
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+    return ProfileBriefResponse(**row)
 
 
 @router.post("/suggestions/{suggestion_id}/approve", response_model=SuggestionItem)
