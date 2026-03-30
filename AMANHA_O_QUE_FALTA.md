@@ -2,6 +2,16 @@
 
 Checklist para **funcionar de ponta a ponta** (site Dhawk + API Render + Meta).
 
+## Atualização 2026-03-30 (correções críticas)
+
+- Backend atualizado em `86123ea` (Render precisa deploy deste commit).
+- Ajustes aplicados:
+  - temas do DNA com filtro forte de stopwords (sem `your/this/about/...`);
+  - detecção de idioma melhorada (evita mistura PT/EN);
+  - legenda gerada com linguagem única por lote;
+  - preview de criativo com fallback no frontend para não ficar em branco.
+- ZIP frontend mais recente: `pilotgram_cpanel_20260330_1835.zip` em `../09_PILOTGRAM_DEPLOY/`.
+
 ## 1. Render (API)
 
 - `META_APP_ID` e `META_APP_SECRET` preenchidos (app em developers.facebook.com).
