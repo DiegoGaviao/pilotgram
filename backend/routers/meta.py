@@ -76,6 +76,7 @@ class SuggestionItem(BaseModel):
     suggested_date: str | None = None
     frequency_per_week: int | None = None
     focus_topic: str | None = None
+    language: str | None = None
 
 
 class SuggestionListResponse(BaseModel):
@@ -189,6 +190,23 @@ def _best_cta(media_items: list[dict[str, Any]]) -> str:
     return "CTA: peça comentário com palavra-chave para enviar o material."
 
 
+def _detect_language(media_items: list[dict[str, Any]]) -> str:
+    text = " ".join([str(m.get("caption") or "").lower() for m in media_items[:12]])
+    if not text.strip():
+        return "pt"
+    en_markers = [" the ", " and ", " your ", " you ", " is ", " are ", " with ", "this "]
+    pt_markers = [" você ", " para ", " com ", " que ", " uma ", " seu ", " sua ", " isso "]
+    en_score = sum(text.count(m.strip()) for m in en_markers)
+    pt_score = sum(text.count(m.strip()) for m in pt_markers)
+    return "en" if en_score > pt_score else "pt"
+
+
+def _cta_by_lang(media_items: list[dict[str, Any]], lang: str) -> str:
+    if lang == "en":
+        return "CTA: ask for a keyword comment and continue in DM."
+    return _best_cta(media_items)
+
+
 def _tone_hint(media_items: list[dict[str, Any]]) -> str:
     return (
         "Tom de voz: direto, prático e humano, com exemplos reais."
@@ -213,9 +231,10 @@ def _build_suggestions_from_media(
     focused_media = _filter_media_by_focus(media_items, focus_topic)
     ranked = sorted(focused_media, key=score, reverse=True)
     top = ranked[: max(1, count)]
+    lang = _detect_language(ranked)
     keywords = _extract_keywords(ranked, limit=6)
     tone_hint = str(dna.get("tone_hint")) if dna else _tone_hint(ranked)
-    cta_hint = str(dna.get("cta_hint")) if dna else _best_cta(ranked)
+    cta_hint = str(dna.get("cta_hint")) if dna else _cta_by_lang(ranked, lang)
     if dna and dna.get("themes"):
         persisted_themes = [str(x).strip() for x in list(dna.get("themes")) if str(x).strip()]
         keywords = (persisted_themes + keywords)[:6]
@@ -235,17 +254,31 @@ def _build_suggestions_from_media(
         angle = angles[idx % len(angles)]
         focus = ", ".join(keywords[:3]) if keywords else "tema principal do perfil"
         day = base_date + timedelta(days=idx * interval_days)
-        hook = (
-            f"Se você sente que está travado em {focus_topic}, este ajuste simples pode virar o jogo."
-            if focus_topic
-            else f"Gancho: {anchor}"
-        )
+        if lang == "en":
+            hook = (
+                f"If you feel stuck in {focus_topic}, this simple shift can change your week."
+                if focus_topic
+                else f"Hook: {anchor}"
+            )
+            body = (
+                "You don't need to reinvent everything. Start with one practical action today: "
+                "pick one key habit, repeat it for 7 days, and track the result."
+            )
+        else:
+            hook = (
+                f"Se você sente que está travado em {focus_topic}, este ajuste simples pode virar o jogo."
+                if focus_topic
+                else f"Gancho: {anchor}"
+            )
+            body = (
+                "Você não precisa reinventar tudo. Comece com 1 ação prática hoje: escolha um hábito-chave, "
+                "repita por 7 dias e registre o resultado."
+            )
         cta_clean = cta_hint.replace("CTA:", "").strip()
         hashtags = " ".join([f"#{t.replace(' ', '')}" for t in (focus_topic.split(",")[:3] if focus_topic else keywords[:3]) if t.strip()])
         suggestion_text = (
             f"{hook}\n\n"
-            f"Você não precisa reinventar tudo. Comece com 1 ação prática hoje: escolha um hábito-chave, "
-            f"repita por 7 dias e registre o resultado.\n\n"
+            f"{body}\n\n"
             f"Exemplo real: {anchor}\n\n"
             f"{cta_clean}\n\n"
             f"{hashtags}"
@@ -254,8 +287,11 @@ def _build_suggestions_from_media(
             f"Instagram post cover, niche {focus_topic or focus}, angle {angle}, "
             f"Brazilian audience, no text in image, clean composition, mobile-friendly, {post_type.lower()} style."
         )
-        seed = quote_plus(f"{ig_user_id}-{idx}-{focus_topic or focus}")
-        creative_image_url = f"https://picsum.photos/seed/{seed}/1080/1080"
+        creative_image_url = str(
+            m.get("media_url")
+            or m.get("thumbnail_url")
+            or f"https://picsum.photos/seed/{quote_plus(f'{ig_user_id}-{idx}-{focus_topic or focus}')}/1080/1080"
+        )
         out.append(
             {
                 "source_media_id": str(m.get("id")) if m.get("id") else None,
@@ -266,6 +302,7 @@ def _build_suggestions_from_media(
                 "suggested_date": day.isoformat(),
                 "frequency_per_week": frequency_per_week,
                 "focus_topic": focus_topic or focus,
+                "language": lang,
             }
         )
     if not out:

@@ -24,6 +24,7 @@ type SuggestionRow = {
   suggested_date?: string | null;
   frequency_per_week?: number | null;
   focus_topic?: string | null;
+  language?: string | null;
 };
 type ProfileDna = {
   ig_user_id: string;
@@ -96,7 +97,8 @@ export default function Dashboard() {
         )}`,
         { method: "POST" }
       );
-      setSuggestions((prev) => [...res.data, ...prev]);
+      // Mostra só o lote recém-gerado para evitar sensação de duplicação.
+      setSuggestions(res.data);
       const dres = await api<ProfileDna>(`/api/v1/meta/ig/${selectedIg}/dna`).catch(() => null);
       setDna(dres);
     } catch (e) {
@@ -219,7 +221,10 @@ export default function Dashboard() {
                   <div className="mt-2 overflow-hidden rounded-xl border border-slate-700 bg-black">
                     <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2 text-xs text-slate-300">
                       <span>@preview_instagram</span>
-                      <span>{s.frequency_per_week ? `${s.frequency_per_week}x/semana` : ""}</span>
+                      <span>
+                        {s.frequency_per_week ? `${s.frequency_per_week}x/semana` : ""}
+                        {s.language ? ` · ${s.language.toUpperCase()}` : ""}
+                      </span>
                     </div>
                     <div className="aspect-square bg-slate-950">
                       {s.creative_image_url ? (

@@ -134,6 +134,7 @@ async def _ensure_content_suggestions_columns(db: aiosqlite.Connection) -> None:
         ("suggested_date", "TEXT"),
         ("frequency_per_week", "INTEGER"),
         ("focus_topic", "TEXT"),
+        ("language", "TEXT"),
     ]
     for name, col_type in additions:
         if name not in cols:
@@ -152,8 +153,8 @@ async def save_content_suggestions(
                 """
                 INSERT INTO content_suggestions (
                     ig_user_id, source_media_id, suggestion_text, rationale, status, created_at,
-                    creative_prompt, creative_image_url, suggested_date, frequency_per_week, focus_topic
-                ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
+                    creative_prompt, creative_image_url, suggested_date, frequency_per_week, focus_topic, language
+                ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ig_user_id,
@@ -166,6 +167,7 @@ async def save_content_suggestions(
                     s.get("suggested_date"),
                     s.get("frequency_per_week"),
                     s.get("focus_topic"),
+                    s.get("language"),
                 ),
             )
             rows.append(
@@ -183,6 +185,7 @@ async def save_content_suggestions(
                     "suggested_date": s.get("suggested_date"),
                     "frequency_per_week": s.get("frequency_per_week"),
                     "focus_topic": s.get("focus_topic"),
+                    "language": s.get("language"),
                 }
             )
         await db.commit()
@@ -194,7 +197,7 @@ async def list_content_suggestions(ig_user_id: str) -> list[dict]:
         async with db.execute(
             """
             SELECT id, ig_user_id, source_media_id, suggestion_text, rationale, status, created_at, approved_at,
-                   creative_prompt, creative_image_url, suggested_date, frequency_per_week, focus_topic
+                   creative_prompt, creative_image_url, suggested_date, frequency_per_week, focus_topic, language
             FROM content_suggestions
             WHERE ig_user_id = ?
             ORDER BY id DESC
@@ -219,6 +222,7 @@ async def list_content_suggestions(ig_user_id: str) -> list[dict]:
                         "suggested_date": row[10],
                         "frequency_per_week": row[11],
                         "focus_topic": row[12],
+                        "language": row[13],
                     }
                 )
             return items
@@ -239,7 +243,7 @@ async def approve_content_suggestion(suggestion_id: int) -> dict | None:
         async with db.execute(
             """
             SELECT id, ig_user_id, source_media_id, suggestion_text, rationale, status, created_at, approved_at,
-                   creative_prompt, creative_image_url, suggested_date, frequency_per_week, focus_topic
+                   creative_prompt, creative_image_url, suggested_date, frequency_per_week, focus_topic, language
             FROM content_suggestions
             WHERE id = ?
             """,
@@ -262,6 +266,7 @@ async def approve_content_suggestion(suggestion_id: int) -> dict | None:
                 "suggested_date": row[10],
                 "frequency_per_week": row[11],
                 "focus_topic": row[12],
+                "language": row[13],
             }
 
 
