@@ -3,7 +3,7 @@
 **Prefixos:** `LA_` = Leads AI · `PG_` = Pilotgram · `META_` = app Meta  
 **Tabelas Supabase Pilotgram:** `pg_*`
 
-Não usamos mais OAuth em `localhost`; redirect Meta = **`https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback`**.
+Não usamos mais OAuth em `localhost`; redirect Meta = **`https://www.dhawk.com.br/projetos/pilotgram/oauth/callback`**.
 
 ## Mesmo `.env` que o Leads AI?
 
@@ -56,7 +56,7 @@ Clica **Run**.
 # Meta: podes reutilizar META_APP_ID / META_APP_SECRET do Leads (mesmo app).
 META_APP_ID=
 META_APP_SECRET=
-META_OAUTH_REDIRECT_URI=https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback
+META_OAUTH_REDIRECT_URI=https://www.dhawk.com.br/projetos/pilotgram/oauth/callback
 META_GRAPH_VERSION=v21.0
 
 PG_API_HOST=0.0.0.0
@@ -101,13 +101,13 @@ VITE_PG_SUPABASE_ANON_KEY=
 
 Adiciona **só** (sem apagar as do Leads AI):
 
-`https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback`
+`https://www.dhawk.com.br/projetos/pilotgram/oauth/callback`
 
 ---
 
 # Bloco 5 — site no browser (utilizadores)
 
-`https://www.dhawk.com.br/projetos/Pilotgram/`
+`https://www.dhawk.com.br/projetos/pilotgram/`
 
 ---
 

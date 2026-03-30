@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     meta_app_id: str = Field("", validation_alias=AliasChoices("META_APP_ID"))
     meta_app_secret: str = Field("", validation_alias=AliasChoices("META_APP_SECRET"))
     meta_oauth_redirect_uri: str = Field(
-        "https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback",
+        "https://www.dhawk.com.br/projetos/pilotgram/oauth/callback",
         validation_alias=AliasChoices("META_OAUTH_REDIRECT_URI"),
     )
     meta_graph_version: str = Field("v21.0", validation_alias=AliasChoices("META_GRAPH_VERSION"))

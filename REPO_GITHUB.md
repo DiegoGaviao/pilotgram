@@ -56,6 +56,7 @@ cd "/Users/diegorufino/Desktop/DEV/2026/02 - Plano 2026/06_PROJETOS_ATIVOS/PILOT
 git init
 git add .
 git status   # confirma que NÃO aparecem .env, node_modules, dist, __pycache__
+# Se correste `npm install` na raiz do PILOTGRAM, `node_modules/` na raiz tem de estar no .gitignore (já está).
 git commit -m "chore: initial Pilotgram (FastAPI + Vite, repo próprio)"
 
 git branch -M main
@@ -64,6 +65,28 @@ git push -u origin main
 ```
 
 Substitui **`DiegoGaviao/pilotgram`** pelo **utilizador/nome** que criaste no passo 1.
+
+### Corrigir `origin` (GitHub avisou “repository moved”)
+
+Se o `remote` tiver typo no user (`GaviaO` vs `Gaviao`):
+
+```bash
+git remote set-url origin https://github.com/DiegoGaviao/pilotgram.git
+```
+
+### Já fizeste push com `node_modules/` na raiz?
+
+1. Garante que o `.gitignore` do projeto tem a linha **`node_modules/`** (já deve ter).
+2. Na pasta PILOTGRAM:
+
+```bash
+git rm -r --cached node_modules
+git add .gitignore
+git commit -m "chore: deixar de versionar node_modules"
+git push
+```
+
+Se o repo **só tem este commit** e queres apagar o histórico gordo de uma vez: em vez do commit acima, podes `git commit --amend` a juntar a remoção ao commit inicial e depois `git push --force` (só se tiveres a certeza que mais ninguém clonou).
 
 ---
 

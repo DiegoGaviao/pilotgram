@@ -4,7 +4,7 @@
 **Passo a passo deploy:** **`PASSO_A_PASSO.md`**.  
 **Fixar ao lado no Cursor:** **`LEIA_PRIMEIRO.md`**.
 
-SaaS Dhawk para **Instagram** (planejar, gerar com IA, aprovar, publicar): **FastAPI** + **React/Vite** + **Supabase**. URL pública: **`https://www.dhawk.com.br/projetos/Pilotgram/`**.
+SaaS Dhawk para **Instagram** (planejar, gerar com IA, aprovar, publicar): **FastAPI** + **React/Vite** + **Supabase**. URL pública: **`https://www.dhawk.com.br/projetos/pilotgram/`**.
 
 ## Variáveis de ambiente
 
@@ -14,16 +14,16 @@ SaaS Dhawk para **Instagram** (planejar, gerar com IA, aprovar, publicar): **Fas
 
 | Camada | Tecnologia |
 |--------|------------|
-| Front | Vite, React, Tailwind, `base: /projetos/Pilotgram/` |
+| Front | Vite, React, Tailwind, `base: /projetos/pilotgram/` |
 | API | FastAPI, Instagram Graph API |
 | Dados | Supabase Postgres (token solo em `pilotgram_oauth_solo`) ou SQLite em dev |
-| Hospedagem front | Hostinger — pasta `public_html/projetos/Pilotgram/` |
+| Hospedagem front | Hostinger — pasta `public_html/projetos/pilotgram/` |
 | API | VPS Hostinger, Render, etc. |
 
 ## Fluxo actual (só produção Dhawk)
 
-- **Site:** `https://www.dhawk.com.br/projetos/Pilotgram/`
-- **OAuth Meta:** redirect só `https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback` (sem localhost).
+- **Site:** `https://www.dhawk.com.br/projetos/pilotgram/`
+- **OAuth Meta:** redirect só `https://www.dhawk.com.br/projetos/pilotgram/oauth/callback` (sem localhost).
 - **Build do front:** na raiz `PILOTGRAM/`, com `web/.env` preenchido (`VITE_PG_API_URL` = URL HTTPS da API), `cd web && npm run build` → enviar `dist/` ao Hostinger.
 - **`npm run dev`** ainda funciona no PC para editar UI; em dev o front usa API em `127.0.0.1:8765` automaticamente, mas **login Meta em produção** exige o site já no domínio.
 

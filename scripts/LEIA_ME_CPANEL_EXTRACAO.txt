@@ -1,0 +1,28 @@
+Pilotgram — como extrair o ZIP no cPanel / SSH
+==============================================
+
+1) Apaga TUDO dentro da pasta do site:
+   .../projetos/pilotgram/
+   (mantém só a pasta pilotgram vazia, ou apaga ficheiros e pastas lá dentro)
+
+2) Envia este ZIP para essa pasta (File Manager → Upload).
+
+3) Extrai o ZIP escolhendo a pasta pilotgram como destino.
+   IMPORTANTE:
+   - Depois de extrair, ao LADO de "assets" tens de ver index.html e .htaccess.
+   - ERRADO: pilotgram/assets/index.html (index.html dentro de assets)
+   - CERTO:  pilotgram/index.html  e  pilotgram/assets/index-xxxxx.js
+
+   Se o File Manager criar uma subpasta com o nome do zip, entra nela,
+   seleciona tudo, MOVE para a pasta pilotgram (um nível acima) e apaga a pasta vazia do zip.
+
+4) Estrutura final esperada:
+   pilotgram/index.html
+   pilotgram/.htaccess
+   pilotgram/assets/index-XXXXX.js
+   pilotgram/assets/index-XXXXX.css
+   (opcional) pilotgram/LEIA_ME_CPANEL_EXTRACAO.txt
+
+5) Abre: https://www.dhawk.com.br/projetos/pilotgram/
+
+Se der erro 500, edita .htaccess e apaga a linha: Options -MultiViews

@@ -51,7 +51,7 @@ O que isso **não** resolve:
 - App criado em [developers.facebook.com](https://developers.facebook.com/).
 - **Instagram Graph API** + **Facebook Login** configurados.
 - **Modo desenvolvimento** até passar pelo que a Meta exige para produção (**App Review** para escopos sensíveis como publicação e insights).
-- URLs de **OAuth redirect** cadastradas em produção: `https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback` (alinhado a `META_OAUTH_REDIRECT_URI` no backend).
+- URLs de **OAuth redirect** cadastradas em produção: `https://www.dhawk.com.br/projetos/pilotgram/oauth/callback` (alinhado a `META_OAUTH_REDIRECT_URI` no backend).
 
 ### 4. O que dá para coletar (expectativa honesta)
 

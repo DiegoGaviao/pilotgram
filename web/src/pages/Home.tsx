@@ -19,7 +19,7 @@ export default function Home() {
         Conectar Meta
       </Link>
       <p className="text-xs text-slate-500">
-        Produção: <code className="text-slate-400">dhawk.com.br/projetos/Pilotgram/</code> — ver{" "}
+        Produção: <code className="text-slate-400">dhawk.com.br/projetos/pilotgram/</code> — ver{" "}
         <code className="text-slate-400">DEPLOY_DHAWK.md</code> e <code className="text-slate-400">PREREQUISITES.md</code>.
       </p>
     </div>

@@ -30,11 +30,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+# União com os dois hostnames Dhawk: no Render, PG_CORS_ORIGINS às vezes fica só com www
+# e o browser em https://dhawk.com.br bloqueia com "No Access-Control-Allow-Origin".
+_DHAWK = frozenset({"https://www.dhawk.com.br", "https://dhawk.com.br"})
+_env = {o.strip() for o in settings.cors_origins.split(",") if o.strip()}
+_cors_origins = sorted(_env | _DHAWK)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_origins
-    or ["https://www.dhawk.com.br", "https://dhawk.com.br"],
+    allow_origins=_cors_origins,
+    allow_origin_regex=r"^https://(www\.)?dhawk\.com\.br$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

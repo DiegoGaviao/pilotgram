@@ -82,7 +82,7 @@ export default function Connect() {
         Você será redirecionado para o Facebook para autorizar o app. É necessário um app configurado
         em developers.facebook.com o redirect tem de ser o mesmo que{" "}
         <code className="text-slate-300">META_OAUTH_REDIRECT_URI</code> no backend:{" "}
-        <code className="text-slate-300">https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback</code>
+        <code className="text-slate-300">https://www.dhawk.com.br/projetos/pilotgram/oauth/callback</code>
         .
       </p>
       <button

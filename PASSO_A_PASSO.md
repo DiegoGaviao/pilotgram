@@ -1,7 +1,7 @@
 # Pilotgram — passo a passo
 
-**URL do site:** `https://www.dhawk.com.br/projetos/Pilotgram/`  
-**Redirect OAuth:** `https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback`
+**URL do site:** `https://www.dhawk.com.br/projetos/pilotgram/`  
+**Redirect OAuth:** `https://www.dhawk.com.br/projetos/pilotgram/oauth/callback`
 
 **Supabase:** podes usar o **mesmo projeto** que o Leads AI; tabela **`pg_oauth_solo`**. Valores de URL/keys: iguais ao Leads — vê `COPY_PASTE_PG.md` (secção “Mesmo `.env`?”).
 
@@ -37,7 +37,7 @@ Só então segue **primeiro** estes dois blocos; depois volta ao quadro de cima.
 1. [developers.facebook.com](https://developers.facebook.com) → a tua app.
 2. **Facebook Login** → **Valid OAuth Redirect URIs** → adiciona (sem apagar as do Leads):
 
-   `https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback`
+   `https://www.dhawk.com.br/projetos/pilotgram/oauth/callback`
 
 ---
 
@@ -48,8 +48,8 @@ Precisas de uma URL **HTTPS** da FastAPI **antes** do build final do front.
 ### Opção A — Render
 
 1. Tens de ter o código no GitHub num **repositório só do Pilotgram** (não o `leads-ai`). Passo a passo: **`REPO_GITHUB.md`**.
-2. [render.com](https://render.com) → **New** → **Blueprint** (ou Web Service).
-3. Escolhe o repo **`pilotgram`** (ou o nome que criaste). **Root Directory** = vazio (a raiz do repo já é o projeto).
+2. **Recomendado — Blueprint (preenche build/start/root por ti):** [render.com](https://render.com) → **New** → **Blueprint** → liga **`DiegoGaviao/pilotgram`**. O ficheiro **`render.yaml`** na raiz define `rootDir: backend`, comandos, health e variáveis públicas; só **META_APP_ID**, **META_APP_SECRET**, **PG_SUPABASE_*** preenches no painel na primeira vez.
+3. **Alternativa — New Web Service manual:** igual ao PDF que tens; **Root Directory** = **`backend`**, build/start como em `render.yaml`. **Root vazio** no painel só se usares Blueprint (o YAML já diz `backend`).
 3. Preenche segredos: `META_APP_ID`, `META_APP_SECRET`, `PG_SUPABASE_URL`, `PG_SUPABASE_SERVICE_ROLE_KEY` (mesmos do Leads / teu `.env`).
 4. Confirma `META_OAUTH_REDIRECT_URI` e `PG_CORS_ORIGINS` alinhados ao `render.yaml` (Dhawk).
 5. Copia a URL Live, ex. `https://pilotgram-api.onrender.com` — **sem `/` no fim**.
@@ -81,16 +81,18 @@ npm run build
 
 ## Upload no Hostinger
 
-1. `public_html/projetos/` → pasta **`Pilotgram`**.
-2. Envia **todo** o conteúdo de **`web/dist/`** para lá.
-3. Abre `https://www.dhawk.com.br/projetos/Pilotgram/`.
+**ZIP numerado (recomendado):** na pasta `PILOTGRAM`, corre `./scripts/package_hostgator.sh` — o ficheiro fica em **`06_PROJETOS_ATIVOS/09_PILOTGRAM_DEPLOY/`** (pasta **09** ao lado do código). Envia esse ZIP ao cPanel, pasta `public_html/projetos/pilotgram/`, **extrai** lá (conteúdo na raiz de `pilotgram/`). Detalhe: **`09_PILOTGRAM_DEPLOY/README.md`**.
+
+**Ou manual:** copia **todo** o conteúdo de **`PILOTGRAM/web/dist/`** para `public_html/projetos/pilotgram/`.
+
+Abre `https://www.dhawk.com.br/projetos/pilotgram/`.
 
 ---
 
 ## Teste OAuth
 
 1. No site, **Conectar Meta**.
-2. Deves voltar a **`/projetos/Pilotgram/oauth/callback`** sem erro.
+2. Deves voltar a **`/projetos/pilotgram/oauth/callback`** sem erro.
 3. Se falhar redirect/URL bloqueada: confere Meta + `META_OAUTH_REDIRECT_URI` no backend (têm de coincidir).
 
 ---

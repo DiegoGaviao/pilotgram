@@ -1,0 +1,19 @@
+# Pilotgram — SPA na pasta pilotgram (Apache).
+# Este ficheiro fica na MESMA pasta que index.html (raiz do dist).
+# Não uses caminho absoluto /projetos/... no RewriteRule: no addon domain
+# o contexto já é ~/dhawk.com.br/; o absoluto pode rebentar !-f e servir HTML em vez de .js.
+
+<IfModule mod_mime.c>
+  AddType application/javascript .js .mjs
+  AddType text/css .css
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  Options -MultiViews
+  RewriteEngine On
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  RewriteRule ^ index.html [L]
+</IfModule>

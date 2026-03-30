@@ -2,7 +2,7 @@
 
 **Queres a ordem completa do início ao fim?** Abre primeiro **`PASSO_A_PASSO.md`**. Este ficheiro é o detalhe técnico por tema.
 
-URL alvo: **`https://www.dhawk.com.br/projetos/Pilotgram/`** (mesmo padrão do Leads AI).
+URL alvo: **`https://www.dhawk.com.br/projetos/pilotgram/`** (mesmo padrão do Leads AI).
 
 ## 1. Supabase
 
@@ -18,14 +18,14 @@ Na raiz `PILOTGRAM/`:
 cd web && npm install && npm run build
 ```
 
-Saída: `web/dist/` — ficheiros estáticos com `base: /projetos/Pilotgram/`.
+Saída: `web/dist/` — ficheiros estáticos com `base: /projetos/pilotgram/`.
 
 ## 3. Upload Hostinger (cPanel / File Manager)
 
 1. No servidor, pasta pública (ex.: `public_html/projetos/`).
 2. Cria diretório **`Pilotgram`** (respeita maiúsculas se o URL for assim).
-3. Envia **todo o conteúdo** de `web/dist/` para `public_html/projetos/Pilotgram/`.
-4. Testa: `https://www.dhawk.com.br/projetos/Pilotgram/` (deve carregar a SPA).
+3. Envia **todo o conteúdo** de `web/dist/` para `public_html/projetos/pilotgram/`.
+4. Testa: `https://www.dhawk.com.br/projetos/pilotgram/` (deve carregar a SPA).
 
 ## 4. API FastAPI (Render ou VPS)
 
@@ -35,7 +35,7 @@ Saída: `web/dist/` — ficheiros estáticos com `base: /projetos/Pilotgram/`.
 
 Em ambos os casos:
 
-- `META_OAUTH_REDIRECT_URI=https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback`
+- `META_OAUTH_REDIRECT_URI=https://www.dhawk.com.br/projetos/pilotgram/oauth/callback`
 - `PG_CORS_ORIGINS=https://www.dhawk.com.br,https://dhawk.com.br`
 
 ## 5. Front liga à API
@@ -54,10 +54,10 @@ Volta a correr `npm run build` e faz upload do `dist`.
 
 No app usado pelo Pilotgram, adiciona **Valid OAuth Redirect URI**:
 
-`https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback`
+`https://www.dhawk.com.br/projetos/pilotgram/oauth/callback`
 
 (Pilotgram **não** usa redirect em `localhost`; só este URI na allowlist.)
 
 ## 7. React Router
 
-O `vite.config` já usa `base: "/projetos/Pilotgram/"` e o `BrowserRouter` usa `import.meta.env.BASE_URL` — não é preciso `homepage` extra.
+O `vite.config` já usa `base: "/projetos/pilotgram/"` e o `BrowserRouter` usa `import.meta.env.BASE_URL` — não é preciso `homepage` extra.

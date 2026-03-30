@@ -1,9 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Deploy estático: public_html/projetos/Pilotgram/ (mesmo padrão do Leads AI)
+// Deploy estático: public_html/projetos/pilotgram/ (minúsculas = pasta no cPanel Linux)
 export default defineConfig({
   plugins: [react()],
-  base: "/projetos/Pilotgram/",
+  base: "/projetos/pilotgram/",
   server: { port: 5173 },
 });

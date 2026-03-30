@@ -1,12 +1,17 @@
 # Blueprint Render — API FastAPI Pilotgram
-# Repo GitHub próprio (ex. github.com/DiegoGaviao/pilotgram) — raiz = esta pasta do projeto; NÃO usar o repo leads-ai.
-# Render: New → Blueprint → escolhe o repo pilotgram; Root Directory vazio.
-# URL HTTPS do serviço → web/.env VITE_PG_API_URL → npm run build no web/.
+# O assistente não consegue clicar no teu Dashboard; isto é o que o Render aplica *automaticamente*
+# quando crias: New → Blueprint → ligas o repo DiegoGaviao/pilotgram.
+# No assistente “New Web Service” manual, usa os mesmos valores (Root = backend, build/start abaixo).
+# Segredos (META_*, Supabase): o Blueprint pede-te uma vez no painel (sync: false).
+# Depois: URL do serviço → web/.env VITE_PG_API_URL → npm run build → Hostinger.
 
 services:
   - type: web
     name: pilotgram-api
     runtime: python
+    plan: free
+    region: oregon
+    branch: main
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
@@ -17,7 +22,7 @@ services:
       - key: META_APP_SECRET
         sync: false
       - key: META_OAUTH_REDIRECT_URI
-        value: https://www.dhawk.com.br/projetos/Pilotgram/oauth/callback
+        value: https://www.dhawk.com.br/projetos/pilotgram/oauth/callback
       - key: META_GRAPH_VERSION
         value: v21.0
       - key: PG_CORS_ORIGINS
