@@ -9,7 +9,9 @@ from __future__ import annotations
 import logging
 import re
 import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+from urllib.parse import quote_plus
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -69,6 +71,11 @@ class SuggestionItem(BaseModel):
     status: str
     created_at: str
     approved_at: str | None = None
+    creative_prompt: str | None = None
+    creative_image_url: str | None = None
+    suggested_date: str | None = None
+    frequency_per_week: int | None = None
+    focus_topic: str | None = None
 
 
 class SuggestionListResponse(BaseModel):
@@ -174,6 +181,8 @@ def _build_suggestions_from_media(
     ig_user_id: str,
     media_items: list[dict[str, Any]],
     count: int,
+    frequency_per_week: int,
+    focus_topic: str,
     dna: dict[str, Any] | None = None,
 ) -> list[dict[str, str | None]]:
     def score(row: dict[str, Any]) -> float:
@@ -197,25 +206,38 @@ def _build_suggestions_from_media(
         "checklist de execução semanal",
     ]
     out: list[dict[str, str | None]] = []
+    base_date = datetime.now(timezone.utc).replace(hour=14, minute=0, second=0, microsecond=0)
+    interval_days = max(1, int(round(7 / max(1, frequency_per_week))))
     for idx, m in enumerate(top):
         anchor = _short_caption(m.get("caption"))
         post_type = str(m.get("media_type") or "POST")
         angle = angles[idx % len(angles)]
         focus = ", ".join(keywords[:3]) if keywords else "tema principal do perfil"
+        day = base_date + timedelta(days=idx * interval_days)
         suggestion_text = (
             f"Ângulo: {angle}\n"
-            f"Foco: {focus}\n"
+            f"Foco do perfil: {focus_topic or focus}\n"
             f"Gancho inspirado em post real: {anchor}\n"
             f"Roteiro (Lead AI style): contexto -> dor específica -> micro-solução -> prova -> CTA.\n"
             f"Formato sugerido: {post_type} adaptado para retenção (hook forte em 2 segundos).\n"
             f"{tone_hint}\n"
             f"{cta_hint}"
         )
+        creative_prompt = (
+            f"Instagram post cover, niche {focus_topic or focus}, angle {angle}, "
+            f"Brazilian audience, no text in image, clean composition, mobile-friendly, {post_type.lower()} style."
+        )
+        creative_image_url = f"https://image.pollinations.ai/prompt/{quote_plus(creative_prompt)}"
         out.append(
             {
                 "source_media_id": str(m.get("id")) if m.get("id") else None,
                 "suggestion_text": suggestion_text,
                 "rationale": "Gerado com base em engajamento, palavras recorrentes e estilo dos melhores posts.",
+                "creative_prompt": creative_prompt,
+                "creative_image_url": creative_image_url,
+                "suggested_date": day.isoformat(),
+                "frequency_per_week": frequency_per_week,
+                "focus_topic": focus_topic or focus,
             }
         )
     if not out:
@@ -392,8 +414,16 @@ async def ig_media_with_insights(
 
 
 @router.post("/ig/{ig_user_id}/suggestions/generate", response_model=SuggestionGenerateResponse)
-async def generate_suggestions(ig_user_id: str, count: int = 5) -> SuggestionGenerateResponse:
+async def generate_suggestions(
+    ig_user_id: str,
+    count: int = 5,
+    frequency_per_week: int = 3,
+    focus_topic: str = "",
+) -> SuggestionGenerateResponse:
     token = await _access_token()
+    count = max(1, min(10, count))
+    frequency_per_week = max(1, min(7, frequency_per_week))
+    focus_topic = (focus_topic or "").strip() or "conteúdo de valor para o nicho da conta"
     media = await graph.fetch_ig_media(token, ig_user_id, limit=max(8, min(25, count * 3)))
     dna_input = _derive_dna_from_media(ig_user_id, media)
     dna_saved = await upsert_profile_dna(
@@ -405,7 +435,9 @@ async def generate_suggestions(ig_user_id: str, count: int = 5) -> SuggestionGen
     draft = _build_suggestions_from_media(
         ig_user_id,
         media,
-        count=max(1, min(10, count)),
+        count=count,
+        frequency_per_week=frequency_per_week,
+        focus_topic=focus_topic,
         dna=dna_saved,
     )
     saved = await save_content_suggestions(ig_user_id, draft)

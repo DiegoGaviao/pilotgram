@@ -19,6 +19,11 @@ type SuggestionRow = {
   status: string;
   created_at: string;
   approved_at?: string | null;
+  creative_prompt?: string | null;
+  creative_image_url?: string | null;
+  suggested_date?: string | null;
+  frequency_per_week?: number | null;
+  focus_topic?: string | null;
 };
 type ProfileDna = {
   ig_user_id: string;
@@ -34,6 +39,8 @@ export default function Dashboard() {
   const [media, setMedia] = useState<MediaRow[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
   const [dna, setDna] = useState<ProfileDna | null>(null);
+  const [focusTopic, setFocusTopic] = useState("autoajuda, coaching, desenvolvimento pessoal");
+  const [frequencyPerWeek, setFrequencyPerWeek] = useState(3);
   const [generating, setGenerating] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -84,7 +91,9 @@ export default function Dashboard() {
     setErr(null);
     try {
       const res = await api<{ data: SuggestionRow[] }>(
-        `/api/v1/meta/ig/${selectedIg}/suggestions/generate?count=5`,
+        `/api/v1/meta/ig/${selectedIg}/suggestions/generate?count=5&frequency_per_week=${frequencyPerWeek}&focus_topic=${encodeURIComponent(
+          focusTopic
+        )}`,
         { method: "POST" }
       );
       setSuggestions((prev) => [...res.data, ...prev]);
@@ -162,14 +171,32 @@ export default function Dashboard() {
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-medium text-slate-200">Sugestões dos robôs (MVP)</h2>
-            <button
-              type="button"
-              onClick={() => void generateSuggestions()}
-              disabled={generating}
-              className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              {generating ? "Gerando..." : "Gerar sugestões IA"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={focusTopic}
+                onChange={(e) => setFocusTopic(e.target.value)}
+                className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                placeholder="Foco do perfil"
+              />
+              <select
+                value={frequencyPerWeek}
+                onChange={(e) => setFrequencyPerWeek(Number(e.target.value))}
+                className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+              >
+                <option value={2}>2x/semana</option>
+                <option value={3}>3x/semana</option>
+                <option value={4}>4x/semana</option>
+                <option value={5}>5x/semana</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void generateSuggestions()}
+                disabled={generating}
+                className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {generating ? "Gerando..." : "Gerar sugestões IA"}
+              </button>
+            </div>
           </div>
           {dna && (
             <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-300">
@@ -186,9 +213,36 @@ export default function Dashboard() {
                   key={s.id}
                   className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-sm"
                 >
-                  <p className="text-xs text-slate-500">{s.created_at}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-slate-300">{s.suggestion_text}</p>
+                  <p className="text-xs text-slate-500">
+                    gerado: {s.created_at} {s.suggested_date ? `· sugerido: ${s.suggested_date}` : ""}
+                  </p>
+                  <div className="mt-2 overflow-hidden rounded-xl border border-slate-700 bg-black">
+                    <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2 text-xs text-slate-300">
+                      <span>@preview_instagram</span>
+                      <span>{s.frequency_per_week ? `${s.frequency_per_week}x/semana` : ""}</span>
+                    </div>
+                    <div className="aspect-square bg-slate-950">
+                      {s.creative_image_url ? (
+                        <img
+                          src={s.creative_image_url}
+                          alt="Criativo sugerido"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center p-3 text-xs text-slate-500">
+                          sem criativo
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2 px-3 py-3">
+                      <p className="text-xs text-slate-400">{s.focus_topic || "foco do perfil"}</p>
+                      <p className="whitespace-pre-wrap text-slate-200">{s.suggestion_text}</p>
+                    </div>
+                  </div>
                   {s.rationale && <p className="mt-2 text-xs text-slate-500">{s.rationale}</p>}
+                  {s.creative_prompt && (
+                    <p className="mt-2 text-xs text-slate-500">criativo: {s.creative_prompt}</p>
+                  )}
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <p className="text-xs text-slate-500">status: {s.status}</p>
                     {s.status !== "approved" && (
