@@ -140,18 +140,59 @@ _STOPWORDS = {
     "for",
     "on",
     "is",
+    "are",
+    "you",
+    "your",
+    "this",
+    "that",
+    "with",
+    "have",
+    "from",
+    "about",
+    "more",
+    "what",
+    "will",
+    "just",
+    "into",
+    "it's",
+    "its",
+    "it's",
+    "teu",
+    "tua",
+    "meu",
+    "minha",
+    "mais",
+    "sobre",
+    "isso",
+    "esse",
+    "essa",
+    "como",
+    "sempre",
+    "nunca",
+    "hoje",
+    "daily",
 }
 
 
 def _extract_keywords(media_items: list[dict[str, Any]], limit: int = 6) -> list[str]:
-    counts: dict[str, int] = {}
+    hashtag_counts: dict[str, int] = {}
+    word_counts: dict[str, int] = {}
     for m in media_items:
         caption = str(m.get("caption") or "").lower()
+        for tag in re.findall(r"#([a-zà-ú0-9_]{3,})", caption):
+            if tag in _STOPWORDS or tag.startswith("http"):
+                continue
+            hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
         for token in re.findall(r"[a-zà-ú0-9_]{4,}", caption):
             if token in _STOPWORDS or token.startswith("http"):
                 continue
-            counts[token] = counts.get(token, 0) + 1
-    return [k for k, _ in sorted(counts.items(), key=lambda x: x[1], reverse=True)[:limit]]
+            # Remove ruído de texto genérico em EN/PT.
+            if token.isdigit() or token in {"http", "https", "www", "reel", "reels", "post"}:
+                continue
+            word_counts[token] = word_counts.get(token, 0) + 1
+    ordered = [k for k, _ in sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)]
+    ordered += [k for k, _ in sorted(word_counts.items(), key=lambda x: x[1], reverse=True) if k not in ordered]
+    return ordered[:limit]
 
 
 def _tokens(text: str) -> list[str]:
@@ -205,10 +246,10 @@ def _detect_language(media_items: list[dict[str, Any]]) -> str:
     text = " ".join([str(m.get("caption") or "").lower() for m in media_items[:12]])
     if not text.strip():
         return "pt"
-    en_markers = [" the ", " and ", " your ", " you ", " is ", " are ", " with ", "this "]
-    pt_markers = [" você ", " para ", " com ", " que ", " uma ", " seu ", " sua ", " isso "]
-    en_score = sum(text.count(m.strip()) for m in en_markers)
-    pt_score = sum(text.count(m.strip()) for m in pt_markers)
+    en_markers = [r"\bthe\b", r"\band\b", r"\byour\b", r"\byou\b", r"\bis\b", r"\bare\b", r"\bwith\b", r"\bthis\b"]
+    pt_markers = [r"\bvocê\b", r"\bpara\b", r"\bcom\b", r"\bque\b", r"\buma\b", r"\bseu\b", r"\bsua\b", r"\bisso\b"]
+    en_score = sum(len(re.findall(p, text)) for p in en_markers)
+    pt_score = sum(len(re.findall(p, text)) for p in pt_markers)
     return "en" if en_score > pt_score else "pt"
 
 
@@ -511,7 +552,7 @@ async def generate_suggestions(
     token = await _access_token()
     count = max(1, min(10, count))
     frequency_per_week = max(1, min(7, frequency_per_week))
-    focus_topic = (focus_topic or "").strip() or "conteúdo de valor para o nicho da conta"
+    focus_topic = (focus_topic or "").strip() or "coaching, mindset, desenvolvimento pessoal"
     media = await graph.fetch_ig_media(token, ig_user_id, limit=max(8, min(25, count * 3)))
     dna_input = _derive_dna_from_media(ig_user_id, media)
     dna_saved = await upsert_profile_dna(

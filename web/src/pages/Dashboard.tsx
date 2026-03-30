@@ -45,6 +45,19 @@ export default function Dashboard() {
   const [generating, setGenerating] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const fallbackCreative =
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080">
+        <rect width="100%" height="100%" fill="#0f172a"/>
+        <text x="50%" y="48%" dominant-baseline="middle" text-anchor="middle" fill="#e2e8f0" font-size="42" font-family="Arial, sans-serif">
+          Preview criativo
+        </text>
+        <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#94a3b8" font-size="28" font-family="Arial, sans-serif">
+          imagem temporariamente indisponível
+        </text>
+      </svg>`
+    );
 
   useEffect(() => {
     void (async () => {
@@ -232,6 +245,12 @@ export default function Dashboard() {
                           src={s.creative_image_url}
                           alt="Criativo sugerido"
                           className="h-full w-full object-cover"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            if (target.src !== fallbackCreative) target.src = fallbackCreative;
+                          }}
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center p-3 text-xs text-slate-500">
