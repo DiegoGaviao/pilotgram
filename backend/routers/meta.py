@@ -11,7 +11,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from urllib.parse import quote_plus
+from urllib.parse import quote, quote_plus
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -308,54 +308,70 @@ def _build_suggestions_from_media(
         focus = ", ".join(keywords[:3]) if keywords else "tema principal do perfil"
         day = base_date + timedelta(days=idx * interval_days)
         if lang == "en":
-            hook = (
-                f"If you feel stuck in {focus_topic}, this simple shift can change your week."
-                if focus_topic
-                else f"Hook: {anchor}"
-            )
+            hook = f"Stuck in {focus_topic}? Start with one small win you can repeat this week."
             body = (
-                "You don't need to reinvent everything. Start with one practical action today: "
-                "pick one key habit, repeat it for 7 days, and track the result."
+                f"Use this angle today: {angle}. Pick one specific situation from your audience's real routine, "
+                "show the old pattern, then show the replacement action in plain language."
             )
             cta_clean = cta_hint.replace("CTA:", "").strip()
-            hashtags = " ".join(
-                [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:3] if t.strip()]
+            kws = [k.strip().replace(" ", "") for k in (keywords[:3] if keywords else ["mindset", "coaching", "growth"]) if k.strip()]
+            keyword_tags = " ".join([f"#{k}" for k in kws[:3]])
+            anchor_line = f"Reference from your own content: {anchor}"
+            focus_tags = " ".join(
+                [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
             )
             suggestion_text = (
                 f"{hook}\n\n"
                 f"{body}\n\n"
-                f"Try this prompt today: What is one thought pattern you need to replace this week?\n\n"
+                f"{anchor_line}\n\n"
+                "Mini-structure for the caption:\n"
+                "1) Name the common mistake in one sentence.\n"
+                "2) Give a 3-step practical fix.\n"
+                "3) Ask for one concrete action in the comments.\n\n"
                 f"{cta_clean}\n\n"
-                f"{hashtags}"
+                f"{keyword_tags} {focus_tags}".strip()
             )
         else:
-            hook = (
-                f"Se você sente que está travado em {focus_topic}, este ajuste simples pode virar o jogo."
-                if focus_topic
-                else f"Gancho: {anchor}"
-            )
+            hook = f"Travou em {focus_topic}? Comece por uma vitória pequena e repetível nesta semana."
             body = (
-                "Você não precisa reinventar tudo. Comece com 1 ação prática hoje: escolha um hábito-chave, "
-                "repita por 7 dias e registre o resultado."
+                f"Use este ângulo hoje: {angle}. Pegue uma situação real da rotina da audiência, "
+                "mostre o padrão antigo e apresente a ação de substituição com linguagem simples."
             )
             cta_clean = cta_hint.replace("CTA:", "").strip()
-            hashtags = " ".join(
-                [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:3] if t.strip()]
+            kws = [k.strip().replace(" ", "") for k in (keywords[:3] if keywords else ["mindset", "coaching", "evolucao"]) if k.strip()]
+            keyword_tags = " ".join([f"#{k}" for k in kws[:3]])
+            anchor_line = f"Referência do teu conteúdo: {anchor}"
+            focus_tags = " ".join(
+                [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
             )
             suggestion_text = (
                 f"{hook}\n\n"
                 f"{body}\n\n"
-                f"Tarefa de hoje: identifique um pensamento sabotador e escreva a versão mais útil dele.\n\n"
+                f"{anchor_line}\n\n"
+                "Mini-roteiro da legenda:\n"
+                "1) Nomeie o erro comum em uma frase.\n"
+                "2) Entregue uma correção prática em 3 passos.\n"
+                "3) Peça uma ação objetiva nos comentários.\n\n"
                 f"{cta_clean}\n\n"
-                f"{hashtags}"
+                f"{keyword_tags} {focus_tags}".strip()
             )
         creative_prompt = (
             f"Instagram post cover, niche {focus_topic or focus}, angle {angle}, "
             f"{'English-speaking' if lang == 'en' else 'Brazilian Portuguese'} audience, "
             f"no text in image, clean composition, mobile-friendly, {post_type.lower()} style."
         )
-        img_label = f"{(focus_topic or focus)[:40]} | {angle[:32]}"
-        creative_image_url = f"https://placehold.co/1080x1080/111827/E5E7EB.png?text={quote_plus(img_label)}"
+        img_label = f"{(focus_topic or focus)[:28]} | {angle[:24]}"
+        svg = (
+            "<svg xmlns='http://www.w3.org/2000/svg' width='1080' height='1080'>"
+            "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
+            "<stop offset='0%' stop-color='#0f172a'/><stop offset='100%' stop-color='#1e293b'/>"
+            "</linearGradient></defs>"
+            "<rect width='100%' height='100%' fill='url(#g)'/>"
+            "<text x='50%' y='46%' text-anchor='middle' fill='#e2e8f0' font-size='44' font-family='Arial'>Creative Preview</text>"
+            f"<text x='50%' y='53%' text-anchor='middle' fill='#94a3b8' font-size='28' font-family='Arial'>{img_label}</text>"
+            "</svg>"
+        )
+        creative_image_url = f"data:image/svg+xml;utf8,{quote(svg)}"
         out.append(
             {
                 "source_media_id": str(m.get("id")) if m.get("id") else None,
