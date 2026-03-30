@@ -12,6 +12,8 @@ Checklist para **funcionar de ponta a ponta** (site Dhawk + API Render + Meta).
   - preview de criativo com fallback no frontend para não ficar em branco.
 - ZIP frontend mais recente: `pilotgram_cpanel_20260330_1835.zip` em `../09_PILOTGRAM_DEPLOY/`.
 - Atualização extra: backend em `aa83210` com criativo inline (`data:image/svg+xml`) e copy menos genérica.
+- Atualização extra 2: `9fbcfb8` com questionário estratégico por página (`/brief`) e fallback visual local no frontend.
+- ZIP frontend mais recente: `pilotgram_cpanel_20260330_1850.zip`.
 
 ## 1. Render (API)
 
