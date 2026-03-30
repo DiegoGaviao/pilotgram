@@ -11,6 +11,7 @@ Checklist para **funcionar de ponta a ponta** (site Dhawk + API Render + Meta).
   - legenda gerada com linguagem única por lote;
   - preview de criativo com fallback no frontend para não ficar em branco.
 - ZIP frontend mais recente: `pilotgram_cpanel_20260330_1835.zip` em `../09_PILOTGRAM_DEPLOY/`.
+- Atualização extra: backend em `aa83210` com criativo inline (`data:image/svg+xml`) e copy menos genérica.
 
 ## 1. Render (API)
 
