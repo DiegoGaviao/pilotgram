@@ -174,6 +174,17 @@ def _filter_media_by_focus(media_items: list[dict[str, Any]], focus_topic: str) 
     return filtered or media_items
 
 
+def _normalize_focus_for_lang(focus_topic: str, lang: str) -> str:
+    raw = (focus_topic or "").strip()
+    if not raw:
+        return "self-help, coaching, personal development" if lang == "en" else "autoajuda, coaching, desenvolvimento pessoal"
+    if lang == "en" and any(x in raw.lower() for x in ["autoajuda", "desenvolvimento", "saúde mental"]):
+        return "self-help, coaching, personal development"
+    if lang == "pt" and any(x in raw.lower() for x in ["self-help", "personal development"]):
+        return "autoajuda, coaching, desenvolvimento pessoal"
+    return raw
+
+
 def _best_cta(media_items: list[dict[str, Any]]) -> str:
     ranked = sorted(
         media_items,
@@ -232,9 +243,10 @@ def _build_suggestions_from_media(
     ranked = sorted(focused_media, key=score, reverse=True)
     top = ranked[: max(1, count)]
     lang = _detect_language(ranked)
+    focus_topic = _normalize_focus_for_lang(focus_topic, lang)
     keywords = _extract_keywords(ranked, limit=6)
     tone_hint = str(dna.get("tone_hint")) if dna else _tone_hint(ranked)
-    cta_hint = str(dna.get("cta_hint")) if dna else _cta_by_lang(ranked, lang)
+    cta_hint = _cta_by_lang(ranked, lang)
     if dna and dna.get("themes"):
         persisted_themes = [str(x).strip() for x in list(dna.get("themes")) if str(x).strip()]
         keywords = (persisted_themes + keywords)[:6]
@@ -264,6 +276,17 @@ def _build_suggestions_from_media(
                 "You don't need to reinvent everything. Start with one practical action today: "
                 "pick one key habit, repeat it for 7 days, and track the result."
             )
+            cta_clean = cta_hint.replace("CTA:", "").strip()
+            hashtags = " ".join(
+                [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:3] if t.strip()]
+            )
+            suggestion_text = (
+                f"{hook}\n\n"
+                f"{body}\n\n"
+                f"Try this prompt today: What is one thought pattern you need to replace this week?\n\n"
+                f"{cta_clean}\n\n"
+                f"{hashtags}"
+            )
         else:
             hook = (
                 f"Se você sente que está travado em {focus_topic}, este ajuste simples pode virar o jogo."
@@ -274,24 +297,24 @@ def _build_suggestions_from_media(
                 "Você não precisa reinventar tudo. Comece com 1 ação prática hoje: escolha um hábito-chave, "
                 "repita por 7 dias e registre o resultado."
             )
-        cta_clean = cta_hint.replace("CTA:", "").strip()
-        hashtags = " ".join([f"#{t.replace(' ', '')}" for t in (focus_topic.split(",")[:3] if focus_topic else keywords[:3]) if t.strip()])
-        suggestion_text = (
-            f"{hook}\n\n"
-            f"{body}\n\n"
-            f"Exemplo real: {anchor}\n\n"
-            f"{cta_clean}\n\n"
-            f"{hashtags}"
-        )
+            cta_clean = cta_hint.replace("CTA:", "").strip()
+            hashtags = " ".join(
+                [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:3] if t.strip()]
+            )
+            suggestion_text = (
+                f"{hook}\n\n"
+                f"{body}\n\n"
+                f"Tarefa de hoje: identifique um pensamento sabotador e escreva a versão mais útil dele.\n\n"
+                f"{cta_clean}\n\n"
+                f"{hashtags}"
+            )
         creative_prompt = (
             f"Instagram post cover, niche {focus_topic or focus}, angle {angle}, "
-            f"Brazilian audience, no text in image, clean composition, mobile-friendly, {post_type.lower()} style."
+            f"{'English-speaking' if lang == 'en' else 'Brazilian Portuguese'} audience, "
+            f"no text in image, clean composition, mobile-friendly, {post_type.lower()} style."
         )
-        creative_image_url = str(
-            m.get("media_url")
-            or m.get("thumbnail_url")
-            or f"https://picsum.photos/seed/{quote_plus(f'{ig_user_id}-{idx}-{focus_topic or focus}')}/1080/1080"
-        )
+        img_label = f"{(focus_topic or focus)[:40]} | {angle[:32]}"
+        creative_image_url = f"https://placehold.co/1080x1080/111827/E5E7EB.png?text={quote_plus(img_label)}"
         out.append(
             {
                 "source_media_id": str(m.get("id")) if m.get("id") else None,
