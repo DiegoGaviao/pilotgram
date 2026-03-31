@@ -736,6 +736,10 @@ async def generate_suggestions(
     count: int = 5,
     frequency_per_week: int = 3,
     focus_topic: str = "",
+    image_style: str = Query(
+        "v1_realistic",
+        description="Preset visual para geração de imagem: v1_realistic | v2_editorial | v3_minimal",
+    ),
     debug: bool = Query(False, description="Retorna debug_trace por sugestão para inspeção passo a passo."),
 ) -> SuggestionGenerateResponse:
     token = await _access_token()
@@ -773,9 +777,13 @@ async def generate_suggestions(
 
         async def enhance_creative(row: dict) -> None:
             async with sem:
+                creative_prompt = str(row.get("creative_prompt") or "")
+                caption_text = str(row.get("suggestion_text") or "")
                 url = await openai_image.generate_image_url(
                     settings.openai_api_key,
-                    str(row.get("creative_prompt") or ""),
+                    creative_prompt,
+                    caption=caption_text,
+                    style=image_style,
                     model=settings.openai_image_model,
                 )
                 if url:
@@ -789,6 +797,13 @@ async def generate_suggestions(
         for i, row in enumerate(normalized):
             if i < len(draft) and isinstance(draft[i], dict):
                 row["debug_trace"] = draft[i].get("debug_trace")
+            row["debug_trace"] = row.get("debug_trace") or {}
+            row["debug_trace"]["image_style"] = image_style
+            row["debug_trace"]["image_prompt_final"] = openai_image.build_image_prompt(
+                creative_prompt=str(row.get("creative_prompt") or ""),
+                caption=str(row.get("suggestion_text") or ""),
+                style=image_style,
+            )
     return SuggestionGenerateResponse(generated=len(normalized), data=[SuggestionItem(**s) for s in normalized])
 
 

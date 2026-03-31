@@ -12,10 +12,35 @@ logger = logging.getLogger(__name__)
 OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations"
 
 
-def _build_image_prompt(prompt: str) -> str:
-    base = (prompt or "").strip()
+STYLE_PRESETS: dict[str, str] = {
+    "v1_realistic": (
+        "Photorealistic cinematic scene, emotionally grounded, realistic people and environments, "
+        "warm natural light, practical coaching/self-help mood."
+    ),
+    "v2_editorial": (
+        "Premium editorial lifestyle aesthetic, clean composition, elegant visual hierarchy, "
+        "subtle color grading, modern social media cover look."
+    ),
+    "v3_minimal": (
+        "Minimalist visual metaphor, high negative space, simple geometric balance, "
+        "quiet and focused mood, clean modern style."
+    ),
+}
+
+
+def build_image_prompt(
+    *,
+    creative_prompt: str,
+    caption: str = "",
+    style: str = "v1_realistic",
+) -> str:
+    """Build the final image prompt after caption generation."""
+    base = (creative_prompt or "").strip()
     if not base:
         return ""
+    style_key = (style or "v1_realistic").strip().lower()
+    style_block = STYLE_PRESETS.get(style_key, STYLE_PRESETS["v1_realistic"])
+    caption_hint = " ".join((caption or "").strip().split())[:260]
     guardrails = (
         "Create a single Instagram square cover image (1:1). "
         "ABSOLUTE RULE: no text, no letters, no words, no numbers, no logos, no watermarks, "
@@ -23,20 +48,31 @@ def _build_image_prompt(prompt: str) -> str:
         "Use only symbolic visual elements and people/objects/scenes related to the topic. "
         "If any text would normally appear, replace it with abstract shapes or icons. "
     )
-    return (guardrails + base)[:3900]
+    context = (
+        f"Visual style preset: {style_key}. {style_block} "
+        + (f"Caption context (internal reference only): {caption_hint}. " if caption_hint else "")
+        + f"Creative direction: {base}"
+    )
+    return (guardrails + context)[:3900]
 
 
 async def generate_image_url(
     api_key: str,
     prompt: str,
     *,
+    caption: str = "",
+    style: str = "v1_realistic",
     model: str = "dall-e-3",
     size: str = "1024x1024",
     timeout_s: float = 120.0,
 ) -> str | None:
     if not api_key.strip() or not (prompt or "").strip():
         return None
-    final_prompt = _build_image_prompt(prompt)
+    final_prompt = build_image_prompt(
+        creative_prompt=prompt,
+        caption=caption,
+        style=style,
+    )
     body: dict[str, Any] = {
         "model": model.strip(),
         "prompt": final_prompt,
