@@ -65,6 +65,8 @@ PG_CORS_ORIGINS=https://www.dhawk.com.br,https://dhawk.com.br
 
 # URL HTTPS pública desta API (para o <img src> do criativo). No Render, RENDER_EXTERNAL_URL costuma bastar.
 # PG_PUBLIC_API_URL=https://pilotgram.onrender.com
+# Se ficar vazio, o backend usa PG_PUBLIC_API_FALLBACK (default pilotgram.onrender.com). Defina vazio só se quiser desligar.
+# PG_PUBLIC_API_FALLBACK=
 
 # Opcional: gerar imagem real via OpenAI Images (DALL·E), como nos teus testes com a API.
 # OPENAI_API_KEY=

@@ -10,6 +10,18 @@ if (!base && import.meta.env.DEV) {
 /** Base URL da API (para montar <img src> em URLs absolutas iguais ao fetch). */
 export const apiBase = base;
 
+/** URL do preview SVG na API (token opaco). Usa VITE_PG_API_URL quando o JSON veio sem creative_image_url. */
+export function creativePreviewUrl(
+  imageUrl: string | null | undefined,
+  token: string | null | undefined
+): string {
+  const u = (imageUrl ?? "").trim();
+  if (u) return u;
+  const t = (token ?? "").trim();
+  if (!t || !base) return "";
+  return `${base.replace(/\/$/, "")}/api/v1/meta/creatives/${encodeURIComponent(t)}`;
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!base) {
     throw new Error(

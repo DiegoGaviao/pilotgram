@@ -60,6 +60,7 @@ async def health() -> dict:
         "sqlite_path": None if settings.use_supabase_for_token else settings.pilotgram_sqlite_path,
         "supabase_configured": settings.use_supabase_for_token,
         "public_api_base_configured": bool(settings.effective_public_api_base),
+        "public_api_base": settings.effective_public_api_base or None,
         "openai_image_configured": bool((settings.openai_api_key or "").strip()),
     }
 

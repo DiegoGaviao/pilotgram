@@ -232,6 +232,7 @@ async def save_content_suggestions(
                     "approved_at": None,
                     "creative_prompt": s.get("creative_prompt"),
                     "creative_image_url": hosted_url,
+                    "creative_fetch_token": token,
                     "suggested_date": s.get("suggested_date"),
                     "frequency_per_week": s.get("frequency_per_week"),
                     "focus_topic": s.get("focus_topic"),
@@ -247,7 +248,8 @@ async def list_content_suggestions(ig_user_id: str) -> list[dict]:
         async with db.execute(
             """
             SELECT id, ig_user_id, source_media_id, suggestion_text, rationale, status, created_at, approved_at,
-                   creative_prompt, creative_image_url, suggested_date, frequency_per_week, focus_topic, language
+                   creative_prompt, creative_image_url, creative_fetch_token, suggested_date, frequency_per_week,
+                   focus_topic, language
             FROM content_suggestions
             WHERE ig_user_id = ?
             ORDER BY id DESC
@@ -269,10 +271,11 @@ async def list_content_suggestions(ig_user_id: str) -> list[dict]:
                         "approved_at": row[7],
                         "creative_prompt": row[8],
                         "creative_image_url": row[9],
-                        "suggested_date": row[10],
-                        "frequency_per_week": row[11],
-                        "focus_topic": row[12],
-                        "language": row[13],
+                        "creative_fetch_token": row[10],
+                        "suggested_date": row[11],
+                        "frequency_per_week": row[12],
+                        "focus_topic": row[13],
+                        "language": row[14],
                     }
                 )
             return items
@@ -293,7 +296,8 @@ async def approve_content_suggestion(suggestion_id: int) -> dict | None:
         async with db.execute(
             """
             SELECT id, ig_user_id, source_media_id, suggestion_text, rationale, status, created_at, approved_at,
-                   creative_prompt, creative_image_url, suggested_date, frequency_per_week, focus_topic, language
+                   creative_prompt, creative_image_url, creative_fetch_token, suggested_date, frequency_per_week,
+                   focus_topic, language
             FROM content_suggestions
             WHERE id = ?
             """,
@@ -313,10 +317,11 @@ async def approve_content_suggestion(suggestion_id: int) -> dict | None:
                 "approved_at": row[7],
                 "creative_prompt": row[8],
                 "creative_image_url": row[9],
-                "suggested_date": row[10],
-                "frequency_per_week": row[11],
-                "focus_topic": row[12],
-                "language": row[13],
+                "creative_fetch_token": row[10],
+                "suggested_date": row[11],
+                "frequency_per_week": row[12],
+                "focus_topic": row[13],
+                "language": row[14],
             }
 
 

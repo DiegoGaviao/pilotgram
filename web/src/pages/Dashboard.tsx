@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api";
+import { api, apiBase, creativePreviewUrl } from "../api";
 
 type PageIg = {
   page_id: string;
@@ -21,6 +21,7 @@ type SuggestionRow = {
   approved_at?: string | null;
   creative_prompt?: string | null;
   creative_image_url?: string | null;
+  creative_fetch_token?: string | null;
   suggested_date?: string | null;
   frequency_per_week?: number | null;
   focus_topic?: string | null;
@@ -126,6 +127,95 @@ const BRIEF_HELP: Record<string, string> = {
     "Lista separada por vírgula: palavras proibidas (concorrentes, promessas arriscadas, gírias que você evita). O gerador tenta remover esses termos do texto.",
 };
 
+/** Carrega criativo cross-origin via fetch→blob para contornar CSP do Hostgator em img-src. */
+function SuggestionCreativeImage({
+  suggestionId,
+  imageUrl,
+  token,
+}: {
+  suggestionId: number;
+  imageUrl?: string | null;
+  token?: string | null;
+}) {
+  const resolved = creativePreviewUrl(imageUrl, token);
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+    setSrc(null);
+    if (!resolved) {
+      setFailed(true);
+      return;
+    }
+    let alive = true;
+    let blobUrl: string | null = null;
+    let cross = false;
+    try {
+      cross = new URL(resolved).origin !== window.location.origin;
+    } catch {
+      cross = false;
+    }
+    if (!cross) {
+      setSrc(resolved);
+      return () => {
+        alive = false;
+      };
+    }
+    void (async () => {
+      try {
+        const r = await fetch(resolved, { mode: "cors", credentials: "omit" });
+        if (!r.ok) throw new Error(String(r.status));
+        const blob = await r.blob();
+        if (!alive) return;
+        blobUrl = URL.createObjectURL(blob);
+        setSrc(blobUrl);
+      } catch {
+        if (alive) {
+          setSrc(resolved);
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [resolved, suggestionId]);
+
+  if (failed || !resolved) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 text-center text-[11px] text-slate-400">
+        <span>
+          {!apiBase
+            ? "Defina VITE_PG_API_URL no build do front (mesma URL da API)."
+            : "Não foi possível mostrar o criativo aqui (rede ou bloqueio)."}
+        </span>
+        {resolved ? (
+          <a href={resolved} target="_blank" rel="noreferrer" className="text-emerald-500 hover:underline">
+            Abrir criativo numa nova aba
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+  if (!src) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-950 text-[11px] text-slate-500">
+        A carregar criativo…
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt="Criativo sugerido"
+      className="h-full w-full object-cover"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function BriefFieldHelp({ children }: { children: ReactNode }) {
   return (
     <details className="relative inline-block align-middle">
@@ -151,7 +241,6 @@ export default function Dashboard() {
   const [generating, setGenerating] = useState(false);
   const [savingBrief, setSavingBrief] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
-  const [brokenImages, setBrokenImages] = useState<Record<number, true>>({});
   const [err, setErr] = useState<string | null>(null);
   const needsReconnect = !!err && err.startsWith("401:");
 
@@ -488,23 +577,11 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="aspect-square bg-slate-950">
-                      {s.creative_image_url && !brokenImages[s.id] ? (
-                        <img
-                          src={s.creative_image_url}
-                          alt="Criativo sugerido"
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                            setBrokenImages((prev) => ({ ...prev, [s.id]: true }));
-                          }}
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 text-center text-xs text-slate-300">
-                          Preview criativo indisponivel no host
-                        </div>
-                      )}
+                      <SuggestionCreativeImage
+                        suggestionId={s.id}
+                        imageUrl={s.creative_image_url}
+                        token={s.creative_fetch_token}
+                      />
                     </div>
                     <div className="space-y-2 px-3 py-3">
                       <p className="text-xs text-slate-400">{s.focus_topic || "foco do perfil"}</p>

@@ -102,6 +102,7 @@ class SuggestionItem(BaseModel):
     approved_at: str | None = None
     creative_prompt: str | None = None
     creative_image_url: str | None = None
+    creative_fetch_token: str | None = None
     suggested_date: str | None = None
     frequency_per_week: int | None = None
     focus_topic: str | None = None
@@ -722,13 +723,26 @@ async def generate_suggestions(
 
         await asyncio.gather(*[enhance_creative(r) for r in saved])
 
-    return SuggestionGenerateResponse(generated=len(saved), data=[SuggestionItem(**s) for s in saved])
+    normalized = [_normalize_suggestion_creative_url(s) for s in saved]
+    return SuggestionGenerateResponse(generated=len(normalized), data=[SuggestionItem(**s) for s in normalized])
+
+
+def _normalize_suggestion_creative_url(row: dict[str, Any]) -> dict[str, Any]:
+    """Preenche creative_image_url a partir do token quando a linha antiga ficou sem URL (base pública vazia)."""
+    r = dict(row)
+    base = settings.effective_public_api_base
+    url = str(r.get("creative_image_url") or "").strip()
+    tok = str(r.get("creative_fetch_token") or "").strip()
+    if not url and tok and base:
+        r["creative_image_url"] = f"{base}/api/v1/meta/creatives/{tok}"
+    return r
 
 
 @router.get("/ig/{ig_user_id}/suggestions", response_model=SuggestionListResponse)
 async def get_suggestions(ig_user_id: str) -> SuggestionListResponse:
     rows = await list_content_suggestions(ig_user_id)
-    return SuggestionListResponse(data=[SuggestionItem(**r) for r in rows], count=len(rows))
+    fixed = [_normalize_suggestion_creative_url(r) for r in rows]
+    return SuggestionListResponse(data=[SuggestionItem(**r) for r in fixed], count=len(fixed))
 
 
 @router.get("/ig/{ig_user_id}/dna", response_model=ProfileDnaResponse)
@@ -838,4 +852,4 @@ async def approve_suggestion(suggestion_id: int) -> SuggestionItem:
     row = await approve_content_suggestion(suggestion_id)
     if not row:
         raise HTTPException(status_code=404, detail="Sugestão não encontrada")
-    return SuggestionItem(**row)
+    return SuggestionItem(**_normalize_suggestion_creative_url(row))

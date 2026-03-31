@@ -74,6 +74,11 @@ class Settings(BaseSettings):
         "",
         validation_alias=AliasChoices("RENDER_EXTERNAL_URL"),
     )
+    # Se RENDER_EXTERNAL_URL falhar, último recurso para montar URL de <img> do criativo (definir vazio para desligar).
+    public_api_fallback: str = Field(
+        "https://pilotgram.onrender.com",
+        validation_alias=AliasChoices("PG_PUBLIC_API_FALLBACK"),
+    )
     openai_api_key: str = Field(
         "",
         validation_alias=AliasChoices("OPENAI_API_KEY", "PG_OPENAI_API_KEY"),
@@ -90,7 +95,8 @@ class Settings(BaseSettings):
             c = (candidate or "").strip().rstrip("/")
             if c:
                 return c
-        return ""
+        fb = (self.public_api_fallback or "").strip().rstrip("/")
+        return fb
 
 
 settings = Settings()
