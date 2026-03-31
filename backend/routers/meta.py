@@ -107,6 +107,7 @@ class SuggestionItem(BaseModel):
     frequency_per_week: int | None = None
     focus_topic: str | None = None
     language: str | None = None
+    debug_trace: dict[str, Any] | None = None
 
 
 class SuggestionListResponse(BaseModel):
@@ -424,23 +425,15 @@ def _build_suggestions_from_media(
             focus_tags = " ".join(
                 [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
             )
-            audience_piece = ""
-            if target:
-                audience_piece = f"For {target.lower()}, "
-            goal_piece = ""
-            if objective:
-                goal_piece = f"who want {objective.lower()}, "
-            hook = (
-                f"{audience_piece}{goal_piece}here's a simple move to unlock progress around {focus_topic or focus}."
-            ).strip()
+            # Não expor texto estratégico bruto do formulário (objetivo/comercial) na copy final.
+            hook = f"Here is a simple angle to unlock progress around {focus_topic or focus}."
             middle = (
-                f"Instead of repeating the same pattern, tell a quick story from a real client or from your own journey. "
-                f"Show the old habit in one sentence and then the new, better action in the same tone you already use on your profile."
+                "Instead of repeating generic advice, tell one real situation your audience faces this week. "
+                "Name the old habit in one line, then show the better action with a concrete example."
             )
             if offer:
                 middle += f" Tie the lesson directly to what you offer: {_clean_sentence(offer)}."
-            anchor_line = f"Use this post as inspiration: {anchor}."
-            caption_core = f"{hook}\n\n{middle}\n\n{anchor_line}"
+            caption_core = f"{hook}\n\n{middle}"
             if cta_clean:
                 caption_core += f"\n\n{cta_clean}"
             hashtags_block = (f"{keyword_tags} {focus_tags}").strip()
@@ -456,34 +449,55 @@ def _build_suggestions_from_media(
             focus_tags = " ".join(
                 [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
             )
-            audience_piece = ""
-            if target:
-                audience_piece = f"Se você fala com {target.lower()}, "
-            goal_piece = ""
-            if objective:
-                goal_piece = f"que quer {objective.lower()}, "
-            hook = (
-                f"{audience_piece}{goal_piece}usa este post para destravar um avanço em {focus_topic or focus}."
-            ).strip()
+            # Não expor texto estratégico bruto do formulário (objetivo/comercial) na copy final.
+            hook = f"Aqui vai um ângulo simples para destravar resultado em {focus_topic or focus}."
             middle = (
-                f"Conte em poucas linhas uma situação real que o teu público vive hoje, mostrando o erro mais comum "
-                f"e em seguida a nova ação que você recomenda, no mesmo tom de voz que já aparece nas tuas melhores postagens."
+                "Em vez de conselho genérico, traga uma situação real que teu público vive nesta semana. "
+                "Mostra o hábito antigo em uma frase e, na sequência, a ação melhor com exemplo concreto."
             )
             if offer:
                 middle += f" Puxa o gancho naturalmente para a tua oferta: {_clean_sentence(offer)}."
-            anchor_line = f"Inspiração tirada do teu próprio feed: {anchor}."
-            caption_core = f"{hook}\n\n{middle}\n\n{anchor_line}"
+            caption_core = f"{hook}\n\n{middle}"
             if cta_clean:
                 caption_core += f"\n\n{cta_clean}"
             hashtags_block = (f"{keyword_tags} {focus_tags}").strip()
             suggestion_text = caption_core if not hashtags_block else f"{caption_core}\n\n{hashtags_block}"
         suggestion_text = clean_blocked(suggestion_text)
         creative_prompt = (
-            f"Instagram post cover, niche {niche or focus_topic or focus}, angle {angle}, "
+            f"Instagram post cover concept for {niche or focus_topic or focus}, angle {angle}, "
             f"{'English-speaking' if lang == 'en' else 'Brazilian Portuguese'} audience, "
             f"{'tone ' + tone_style + ', ' if tone_style else ''}"
-            f"no text in image, clean composition, mobile-friendly, {post_type.lower()} style."
+            f"clean composition, mobile-friendly, {post_type.lower()} style, symbolic scene only, "
+            f"STRICTLY no words, no letters, no numbers, no typography, no logos, no watermark, no UI."
         )
+        debug_trace = {
+            "stage_1_inputs": {
+                "ig_user_id": ig_user_id,
+                "source_media_id": str(m.get("id") or ""),
+                "focus_topic_input": focus_topic,
+                "preferred_language": forced_lang or "(auto)",
+                "brief": {
+                    "niche": niche,
+                    "target_audience": target,
+                    "objective": objective,
+                    "offer_summary": offer,
+                    "tone_style": tone_style,
+                    "do_not_use_terms": ",".join(blocked_terms),
+                },
+            },
+            "stage_2_signals": {
+                "detected_language": lang,
+                "top_keywords": keywords[:6],
+                "selected_angle": angle,
+                "selected_focus": focus,
+                "tone_hint": tone_hint,
+                "cta_hint": cta_hint,
+            },
+            "stage_3_outputs": {
+                "caption_preview": suggestion_text[:280],
+                "creative_prompt": creative_prompt,
+            },
+        }
         out.append(
             {
                 "source_media_id": str(m.get("id")) if m.get("id") else None,
@@ -495,6 +509,7 @@ def _build_suggestions_from_media(
                 "frequency_per_week": frequency_per_week,
                 "focus_topic": focus_topic or focus,
                 "language": lang,
+                "debug_trace": debug_trace,
             }
         )
     if not out:
@@ -721,6 +736,7 @@ async def generate_suggestions(
     count: int = 5,
     frequency_per_week: int = 3,
     focus_topic: str = "",
+    debug: bool = Query(False, description="Retorna debug_trace por sugestão para inspeção passo a passo."),
 ) -> SuggestionGenerateResponse:
     token = await _access_token()
     count = max(1, min(10, count))
@@ -769,6 +785,10 @@ async def generate_suggestions(
         await asyncio.gather(*[enhance_creative(r) for r in saved])
 
     normalized = [_normalize_suggestion_creative_url(s) for s in saved]
+    if debug:
+        for i, row in enumerate(normalized):
+            if i < len(draft) and isinstance(draft[i], dict):
+                row["debug_trace"] = draft[i].get("debug_trace")
     return SuggestionGenerateResponse(generated=len(normalized), data=[SuggestionItem(**s) for s in normalized])
 
 

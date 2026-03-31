@@ -12,6 +12,20 @@ logger = logging.getLogger(__name__)
 OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations"
 
 
+def _build_image_prompt(prompt: str) -> str:
+    base = (prompt or "").strip()
+    if not base:
+        return ""
+    guardrails = (
+        "Create a single Instagram square cover image (1:1). "
+        "ABSOLUTE RULE: no text, no letters, no words, no numbers, no logos, no watermarks, "
+        "no UI screens, no typographic elements of any kind. "
+        "Use only symbolic visual elements and people/objects/scenes related to the topic. "
+        "If any text would normally appear, replace it with abstract shapes or icons. "
+    )
+    return (guardrails + base)[:3900]
+
+
 async def generate_image_url(
     api_key: str,
     prompt: str,
@@ -22,9 +36,10 @@ async def generate_image_url(
 ) -> str | None:
     if not api_key.strip() or not (prompt or "").strip():
         return None
+    final_prompt = _build_image_prompt(prompt)
     body: dict[str, Any] = {
         "model": model.strip(),
-        "prompt": prompt.strip()[:4000],
+        "prompt": final_prompt,
         "n": 1,
         "size": size,
         "response_format": "url",
