@@ -376,62 +376,71 @@ def _build_suggestions_from_media(
         angle = angles[idx % len(angles)]
         focus = ", ".join(keywords[:3]) if keywords else "tema principal do perfil"
         day = base_date + timedelta(days=idx * interval_days)
+        # Legenda final pronta para postar — sem rótulos internos ou mini-roteiro.
         if lang == "en":
-            hook = f"Stuck in {focus_topic}? Start with one small win you can repeat this week."
-            body = (
-                f"Use this angle today: {angle}. Pick one specific situation from your audience's real routine, "
-                "show the old pattern, then show the replacement action in plain language."
-            )
             cta_clean = cta_hint.replace("CTA:", "").strip()
-            kws = [k.strip().replace(" ", "") for k in (keywords[:3] if keywords else ["mindset", "coaching", "growth"]) if k.strip()]
+            kws = [
+                k.strip().replace(" ", "")
+                for k in (keywords[:3] if keywords else ["mindset", "coaching", "growth"])
+                if k.strip()
+            ]
             keyword_tags = " ".join([f"#{k}" for k in kws[:3]])
-            anchor_line = f"Reference from your own content: {anchor}"
             focus_tags = " ".join(
                 [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
             )
-            audience_goal = f"Audience: {target}\nGoal: {objective}\n\n" if (target or objective) else ""
-            offer_line = f"Offer angle: {offer}\n\n" if offer else ""
-            suggestion_text = (
-                f"{hook}\n\n"
-                f"{body}\n\n"
-                f"{audience_goal}"
-                f"{anchor_line}\n\n"
-                "Mini-structure for the caption:\n"
-                "1) Name the common mistake in one sentence.\n"
-                "2) Give a 3-step practical fix.\n"
-                "3) Ask for one concrete action in the comments.\n\n"
-                f"{offer_line}"
-                f"{cta_clean}\n\n"
-                f"{keyword_tags} {focus_tags}".strip()
+            audience_piece = ""
+            if target:
+                audience_piece = f"For {target.lower()}, "
+            goal_piece = ""
+            if objective:
+                goal_piece = f"who want {objective.lower()}, "
+            hook = (
+                f"{audience_piece}{goal_piece}here's a simple move to unlock progress around {focus_topic or focus}."
+            ).strip()
+            middle = (
+                f"Instead of repeating the same pattern, tell a quick story from a real client or from your own journey. "
+                f"Show the old habit in one sentence and then the new, better action in the same tone you already use on your profile."
             )
+            if offer:
+                middle += f" Tie the lesson directly to what you offer: {offer.strip()}."
+            anchor_line = f"Use this post as inspiration: {anchor}."
+            caption_core = f"{hook}\n\n{middle}\n\n{anchor_line}"
+            if cta_clean:
+                caption_core += f"\n\n{cta_clean}"
+            hashtags_block = (f"{keyword_tags} {focus_tags}").strip()
+            suggestion_text = caption_core if not hashtags_block else f"{caption_core}\n\n{hashtags_block}"
         else:
-            hook = f"Travou em {focus_topic}? Comece por uma vitória pequena e repetível nesta semana."
-            body = (
-                f"Use este ângulo hoje: {angle}. Pegue uma situação real da rotina da audiência, "
-                "mostre o padrão antigo e apresente a ação de substituição com linguagem simples."
-            )
             cta_clean = cta_hint.replace("CTA:", "").strip()
-            kws = [k.strip().replace(" ", "") for k in (keywords[:3] if keywords else ["mindset", "coaching", "evolucao"]) if k.strip()]
+            kws = [
+                k.strip().replace(" ", "")
+                for k in (keywords[:3] if keywords else ["mindset", "coaching", "evolucao"])
+                if k.strip()
+            ]
             keyword_tags = " ".join([f"#{k}" for k in kws[:3]])
-            anchor_line = f"Referência do teu conteúdo: {anchor}"
             focus_tags = " ".join(
                 [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
             )
-            audience_goal = f"Público: {target}\nObjetivo: {objective}\n\n" if (target or objective) else ""
-            offer_line = f"Gancho de oferta: {offer}\n\n" if offer else ""
-            suggestion_text = (
-                f"{hook}\n\n"
-                f"{body}\n\n"
-                f"{audience_goal}"
-                f"{anchor_line}\n\n"
-                "Mini-roteiro da legenda:\n"
-                "1) Nomeie o erro comum em uma frase.\n"
-                "2) Entregue uma correção prática em 3 passos.\n"
-                "3) Peça uma ação objetiva nos comentários.\n\n"
-                f"{offer_line}"
-                f"{cta_clean}\n\n"
-                f"{keyword_tags} {focus_tags}".strip()
+            audience_piece = ""
+            if target:
+                audience_piece = f"Se você fala com {target.lower()}, "
+            goal_piece = ""
+            if objective:
+                goal_piece = f"que quer {objective.lower()}, "
+            hook = (
+                f"{audience_piece}{goal_piece}usa este post para destravar um avanço em {focus_topic or focus}."
+            ).strip()
+            middle = (
+                f"Conte em poucas linhas uma situação real que o teu público vive hoje, mostrando o erro mais comum "
+                f"e em seguida a nova ação que você recomenda, no mesmo tom de voz que já aparece nas tuas melhores postagens."
             )
+            if offer:
+                middle += f" Puxa o gancho naturalmente para a tua oferta: {offer.strip()}."
+            anchor_line = f"Inspiração tirada do teu próprio feed: {anchor}."
+            caption_core = f"{hook}\n\n{middle}\n\n{anchor_line}"
+            if cta_clean:
+                caption_core += f"\n\n{cta_clean}"
+            hashtags_block = (f"{keyword_tags} {focus_tags}").strip()
+            suggestion_text = caption_core if not hashtags_block else f"{caption_core}\n\n{hashtags_block}"
         suggestion_text = clean_blocked(suggestion_text)
         creative_prompt = (
             f"Instagram post cover, niche {niche or focus_topic or focus}, angle {angle}, "
