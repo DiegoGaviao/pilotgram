@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 
@@ -97,6 +97,48 @@ function persistBriefLocal(ig: string, b: ProfileBrief) {
   }
 }
 
+function briefAllFieldsEmpty(b: ProfileBrief): boolean {
+  return ![
+    b.niche,
+    b.target_audience,
+    b.objective,
+    b.offer_summary,
+    b.preferred_language,
+    b.tone_style,
+    b.do_not_use_terms,
+  ].some((x) => (x ?? "").trim());
+}
+
+const BRIEF_HELP: Record<string, string> = {
+  niche:
+    "Em uma frase: que mercado ou tema você domina? Quanto mais específico, melhor o robô acerta. Ex.: “liderança para mães empreendedoras”, “gelo escultural para casamentos”. Evite só “motivação” ou “conteúdo”.",
+  target_audience:
+    "Quem é a pessoa que você quer atrair: faixa etária, contexto de vida, principal dor ou desejo. Ex.: “mulheres 30–45, culpa e cansaço ao conciliar filhos e negócio”.",
+  objective:
+    "Meta clara para 60–90 dias no Instagram: vender mentoria, gerar leads no WhatsApp, crescer alcance, posicionar autoridade. Uma linha já basta.",
+  offer_summary:
+    "O que você vende ou quer vender (nome + formato). Ex.: “mentoria 12 semanas”, “consultoria de anúncios”, “ebook + comunidade”. Ajuda a amarrar CTA e criativos.",
+  preferred_language:
+    "Digite pt ou en. Define o idioma principal das legendas geradas. Deve bater com o público da conta.",
+  tone_style:
+    "Como você fala na marca: 2–5 palavras. Ex.: “acolhedor e direto”, “técnico sem jargão”, “provocador com humor leve”, “premium e calmo”.",
+  do_not_use_terms:
+    "Lista separada por vírgula: palavras proibidas (concorrentes, promessas arriscadas, gírias que você evita). O gerador tenta remover esses termos do texto.",
+};
+
+function BriefFieldHelp({ children }: { children: ReactNode }) {
+  return (
+    <details className="relative inline-block align-middle">
+      <summary className="ml-1 inline-flex cursor-pointer list-none items-center justify-center rounded-full border border-slate-600 bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-bold text-slate-400 hover:border-emerald-600 hover:text-emerald-400 [&::-webkit-details-marker]:hidden">
+        ?
+      </summary>
+      <div className="absolute right-0 z-30 mt-1 w-[min(calc(100vw-2rem),18rem)] rounded-md border border-slate-700 bg-slate-950 p-2 text-[11px] leading-snug text-slate-300 shadow-xl">
+        {children}
+      </div>
+    </details>
+  );
+}
+
 export default function Dashboard() {
   const [pages, setPages] = useState<PageIg[] | null>(null);
   const [selectedIg, setSelectedIg] = useState<string | null>(null);
@@ -135,15 +177,22 @@ export default function Dashboard() {
     }
     void (async () => {
       try {
-        const [res, sres, dres, bres] = await Promise.all([
+        const [res, sres] = await Promise.all([
           api<{ data: MediaRow[] }>(`/api/v1/meta/ig/${selectedIg}/media-with-insights?limit=8`),
           api<{ data: SuggestionRow[] }>(`/api/v1/meta/ig/${selectedIg}/suggestions`),
-          api<ProfileDna>(`/api/v1/meta/ig/${selectedIg}/dna`).catch(() => null),
-          api<ProfileBrief>(`/api/v1/meta/ig/${selectedIg}/brief`).catch(() => null),
         ]);
         setMedia(res.data);
         setSuggestions(sres.data);
+
+        let dres = await api<ProfileDna>(`/api/v1/meta/ig/${selectedIg}/dna`).catch(() => null);
+        if (!dres && res.data.length > 0) {
+          dres = await api<ProfileDna>(`/api/v1/meta/ig/${selectedIg}/dna/refresh`, {
+            method: "POST",
+          }).catch(() => null);
+        }
         setDna(dres);
+
+        const bres = await api<ProfileBrief>(`/api/v1/meta/ig/${selectedIg}/brief`).catch(() => null);
         const baseBrief: ProfileBrief =
           bres ?? {
             ig_user_id: selectedIg,
@@ -226,7 +275,7 @@ export default function Dashboard() {
           do_not_use_terms: brief.do_not_use_terms,
         }),
       });
-      setBrief(saved);
+      setBrief(mergeBriefWithLocalStorage(selectedIg, saved));
       persistBriefLocal(selectedIg, saved);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -337,10 +386,31 @@ export default function Dashboard() {
           )}
           {brief && (
             <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-300">
-              <p className="mb-1 font-medium text-slate-200">Questionário estratégico da página</p>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <p className="font-medium text-slate-200">Questionário estratégico da página</p>
+                <details className="text-[11px] text-slate-500">
+                  <summary className="cursor-pointer list-none text-emerald-500/90 hover:underline [&::-webkit-details-marker]:hidden">
+                    Resumo: como responder
+                  </summary>
+                  <p className="mt-2 max-w-xl rounded border border-slate-800 bg-slate-950/80 p-2 text-slate-400">
+                    Quanto mais concreto, melhor a legenda e o criativo. O sistema cruza estas respostas com o{" "}
+                    <strong className="text-slate-300">DNA</strong> (temas e padrões extraídos dos seus posts
+                    recentes). Campos vazios podem ser sugeridos automaticamente a partir do Instagram — revise
+                    sempre. Use <strong className="text-slate-300">Atualizar questionário</strong> para gravar no
+                    servidor; ao <strong className="text-slate-300">Gerar sugestões</strong>, o que está no
+                    formulário é salvo antes de gerar.
+                  </p>
+                </details>
+              </div>
               {brief.updated_at ? (
                 <p className="mb-2 text-[11px] text-slate-500">
                   Última gravação no servidor: {brief.updated_at}
+                </p>
+              ) : null}
+              {brief.updated_at && briefAllFieldsEmpty(brief) ? (
+                <p className="mb-2 text-[11px] text-sky-500/95">
+                  A última gravação tinha todos os campos vazios (ou o servidor foi reiniciado e perdeu dados
+                  antigos). Preencha abaixo ou confira as sugestões vindas do DNA após carregar os posts.
                 </p>
               ) : null}
               {brief.filled_from_dna ? (
@@ -350,50 +420,45 @@ export default function Dashboard() {
                   será usado ao gerar.
                 </p>
               ) : null}
-              <div className="grid gap-2 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2">
+                {(
+                  [
+                    ["niche", "Nicho", "Nicho (ex: liderança para empreendedoras)"],
+                    ["target_audience", "Público-alvo", "Quem você quer atingir"],
+                    ["objective", "Objetivo principal", "Meta nos próximos 60–90 dias"],
+                    ["offer_summary", "Oferta / serviço", "O que você vende ou oferece"],
+                    ["preferred_language", "Idioma (pt ou en)", "pt ou en"],
+                    ["tone_style", "Tom de voz", "Ex.: acolhedor, direto, premium"],
+                  ] as const
+                ).map(([key, label, ph]) => (
+                  <div key={key} className="flex flex-col gap-1">
+                    <div className="flex items-center">
+                      <span className="text-[11px] font-medium text-slate-400">{label}</span>
+                      <BriefFieldHelp>{BRIEF_HELP[key]}</BriefFieldHelp>
+                    </div>
+                    <input
+                      value={brief[key]}
+                      onChange={(e) =>
+                        setBrief({ ...brief, [key]: e.target.value } as ProfileBrief)
+                      }
+                      className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                      placeholder={ph}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-col gap-1">
+                <div className="flex items-center">
+                  <span className="text-[11px] font-medium text-slate-400">Termos proibidos</span>
+                  <BriefFieldHelp>{BRIEF_HELP.do_not_use_terms}</BriefFieldHelp>
+                </div>
                 <input
-                  value={brief.niche}
-                  onChange={(e) => setBrief({ ...brief, niche: e.target.value })}
-                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                  placeholder="Nicho (ex: liderança para empreendedoras)"
-                />
-                <input
-                  value={brief.target_audience}
-                  onChange={(e) => setBrief({ ...brief, target_audience: e.target.value })}
-                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                  placeholder="Público-alvo"
-                />
-                <input
-                  value={brief.objective}
-                  onChange={(e) => setBrief({ ...brief, objective: e.target.value })}
-                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                  placeholder="Objetivo principal"
-                />
-                <input
-                  value={brief.offer_summary}
-                  onChange={(e) => setBrief({ ...brief, offer_summary: e.target.value })}
-                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                  placeholder="Oferta/serviço"
-                />
-                <input
-                  value={brief.preferred_language}
-                  onChange={(e) => setBrief({ ...brief, preferred_language: e.target.value })}
-                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                  placeholder="Idioma preferido (en ou pt)"
-                />
-                <input
-                  value={brief.tone_style}
-                  onChange={(e) => setBrief({ ...brief, tone_style: e.target.value })}
-                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                  placeholder="Tom (ex: direto, premium, acolhedor)"
+                  value={brief.do_not_use_terms}
+                  onChange={(e) => setBrief({ ...brief, do_not_use_terms: e.target.value })}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                  placeholder="Separados por vírgula"
                 />
               </div>
-              <input
-                value={brief.do_not_use_terms}
-                onChange={(e) => setBrief({ ...brief, do_not_use_terms: e.target.value })}
-                className="mt-2 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                placeholder="Termos proibidos (separados por vírgula)"
-              />
               <button
                 type="button"
                 onClick={() => void saveBrief()}

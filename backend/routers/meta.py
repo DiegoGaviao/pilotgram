@@ -746,9 +746,37 @@ async def get_dna(ig_user_id: str) -> ProfileDnaResponse:
     )
 
 
+@router.post("/ig/{ig_user_id}/dna/refresh", response_model=ProfileDnaResponse)
+async def refresh_dna(ig_user_id: str) -> ProfileDnaResponse:
+    """Atualiza DNA a partir das mídias recentes (sem gerar sugestões). Usado ao abrir o dashboard."""
+    token = await _access_token()
+    media = await graph.fetch_ig_media(token, ig_user_id, limit=25)
+    if not media:
+        raise HTTPException(status_code=400, detail="Sem mídias Instagram para analisar neste perfil.")
+    dna_input = _derive_dna_from_media(ig_user_id, media)
+    await upsert_profile_dna(
+        ig_user_id=ig_user_id,
+        themes=list(dna_input["themes"]),
+        tone_hint=str(dna_input["tone_hint"]),
+        cta_hint=str(dna_input["cta_hint"]),
+        language_hint=str(dna_input.get("language_hint") or "pt"),
+    )
+    row = await get_profile_dna(ig_user_id)
+    if not row:
+        raise HTTPException(status_code=500, detail="Falha ao persistir DNA")
+    return ProfileDnaResponse(
+        ig_user_id=str(row["ig_user_id"]),
+        themes=list(row.get("themes") or []),
+        tone_hint=str(row.get("tone_hint") or ""),
+        cta_hint=str(row.get("cta_hint") or ""),
+        language_hint=str(row.get("language_hint") or "pt"),
+        updated_at=str(row.get("updated_at") or ""),
+    )
+
+
 @router.put("/ig/{ig_user_id}/brief", response_model=ProfileBriefResponse)
 async def put_brief(ig_user_id: str, body: ProfileBriefBody) -> ProfileBriefResponse:
-    saved = await upsert_profile_brief(
+    await upsert_profile_brief(
         ig_user_id=ig_user_id,
         niche=body.niche,
         target_audience=body.target_audience,
@@ -758,7 +786,7 @@ async def put_brief(ig_user_id: str, body: ProfileBriefBody) -> ProfileBriefResp
         tone_style=body.tone_style,
         do_not_use_terms=body.do_not_use_terms,
     )
-    return ProfileBriefResponse(**saved)
+    return await get_brief(ig_user_id)
 
 
 @router.get("/ig/{ig_user_id}/brief", response_model=ProfileBriefResponse)
