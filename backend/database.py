@@ -416,6 +416,22 @@ async def upsert_profile_brief(
     do_not_use_terms: str,
 ) -> dict:
     now = datetime.now(timezone.utc).isoformat()
+    payload = {
+        "ig_user_id": ig_user_id,
+        "niche": niche.strip(),
+        "target_audience": target_audience.strip(),
+        "objective": objective.strip(),
+        "offer_summary": offer_summary.strip(),
+        "preferred_language": preferred_language.strip(),
+        "tone_style": tone_style.strip(),
+        "do_not_use_terms": do_not_use_terms.strip(),
+        "updated_at": now,
+    }
+    if settings.use_supabase_for_token:
+        from supabase_store import upsert_profile_brief_sync
+
+        await asyncio.to_thread(upsert_profile_brief_sync, payload)
+        return payload
     async with aiosqlite.connect(_db_path()) as db:
         await db.execute(
             """
@@ -447,20 +463,14 @@ async def upsert_profile_brief(
             ),
         )
         await db.commit()
-    return {
-        "ig_user_id": ig_user_id,
-        "niche": niche.strip(),
-        "target_audience": target_audience.strip(),
-        "objective": objective.strip(),
-        "offer_summary": offer_summary.strip(),
-        "preferred_language": preferred_language.strip(),
-        "tone_style": tone_style.strip(),
-        "do_not_use_terms": do_not_use_terms.strip(),
-        "updated_at": now,
-    }
+    return payload
 
 
 async def get_profile_brief(ig_user_id: str) -> dict | None:
+    if settings.use_supabase_for_token:
+        from supabase_store import get_profile_brief_sync
+
+        return await asyncio.to_thread(get_profile_brief_sync, ig_user_id)
     async with aiosqlite.connect(_db_path()) as db:
         async with db.execute(
             """

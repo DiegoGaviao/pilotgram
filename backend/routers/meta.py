@@ -153,6 +153,34 @@ def _short_caption(caption: str | None) -> str:
     return text
 
 
+def _clean_sentence(text: str) -> str:
+    t = re.sub(r"\s+", " ", (text or "").strip())
+    t = re.sub(r"[.,;:!?]{2,}", ".", t)
+    return t.strip(" .")
+
+
+def _is_placeholder_brief(text: str) -> bool:
+    t = _clean_sentence(text).lower()
+    if not t:
+        return True
+    placeholder_markers = [
+        "suggested from recent posts",
+        "adjust to your real audience",
+        "refine to your goal",
+        "growth, authority and conversion on instagram",
+        "kads, adsoftheworld",
+    ]
+    return any(p in t for p in placeholder_markers)
+
+
+def _looks_portuguese(text: str) -> bool:
+    t = (text or "").lower()
+    return any(
+        m in t
+        for m in [" você ", " para ", " com ", " que ", " não ", " comentário", "enviar", "material", "peça"]
+    )
+
+
 _STOPWORDS = {
     "a",
     "o",
@@ -302,7 +330,7 @@ def _detect_language(media_items: list[dict[str, Any]]) -> str:
 
 def _cta_by_lang(media_items: list[dict[str, Any]], lang: str) -> str:
     if lang == "en":
-        return "CTA: ask for a keyword comment and continue in DM."
+        return "CTA: comment with a keyword and I will send the details in DM."
     return _best_cta(media_items)
 
 
@@ -360,6 +388,14 @@ def _build_suggestions_from_media(
     target = str((brief or {}).get("target_audience") or "").strip()
     tone_style = str((brief or {}).get("tone_style") or "").strip()
     offer = str((brief or {}).get("offer_summary") or "").strip()
+    if _is_placeholder_brief(target):
+        target = ""
+    if _is_placeholder_brief(objective):
+        objective = ""
+    if _is_placeholder_brief(offer):
+        offer = ""
+    if forced_lang in {"en", "english"} and _looks_portuguese(offer):
+        offer = ""
     blocked_terms = [
         t.strip().lower() for t in str((brief or {}).get("do_not_use_terms") or "").split(",") if t.strip()
     ]
@@ -378,7 +414,7 @@ def _build_suggestions_from_media(
         day = base_date + timedelta(days=idx * interval_days)
         # Legenda final pronta para postar — sem rótulos internos ou mini-roteiro.
         if lang == "en":
-            cta_clean = cta_hint.replace("CTA:", "").strip()
+            cta_clean = _clean_sentence(cta_hint.replace("CTA:", ""))
             kws = [
                 k.strip().replace(" ", "")
                 for k in (keywords[:3] if keywords else ["mindset", "coaching", "growth"])
@@ -402,7 +438,7 @@ def _build_suggestions_from_media(
                 f"Show the old habit in one sentence and then the new, better action in the same tone you already use on your profile."
             )
             if offer:
-                middle += f" Tie the lesson directly to what you offer: {offer.strip()}."
+                middle += f" Tie the lesson directly to what you offer: {_clean_sentence(offer)}."
             anchor_line = f"Use this post as inspiration: {anchor}."
             caption_core = f"{hook}\n\n{middle}\n\n{anchor_line}"
             if cta_clean:
@@ -410,7 +446,7 @@ def _build_suggestions_from_media(
             hashtags_block = (f"{keyword_tags} {focus_tags}").strip()
             suggestion_text = caption_core if not hashtags_block else f"{caption_core}\n\n{hashtags_block}"
         else:
-            cta_clean = cta_hint.replace("CTA:", "").strip()
+            cta_clean = _clean_sentence(cta_hint.replace("CTA:", ""))
             kws = [
                 k.strip().replace(" ", "")
                 for k in (keywords[:3] if keywords else ["mindset", "coaching", "evolucao"])
@@ -434,7 +470,7 @@ def _build_suggestions_from_media(
                 f"e em seguida a nova ação que você recomenda, no mesmo tom de voz que já aparece nas tuas melhores postagens."
             )
             if offer:
-                middle += f" Puxa o gancho naturalmente para a tua oferta: {offer.strip()}."
+                middle += f" Puxa o gancho naturalmente para a tua oferta: {_clean_sentence(offer)}."
             anchor_line = f"Inspiração tirada do teu próprio feed: {anchor}."
             caption_core = f"{hook}\n\n{middle}\n\n{anchor_line}"
             if cta_clean:
