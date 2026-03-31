@@ -7,6 +7,9 @@ if (!base && import.meta.env.DEV) {
   base = "http://127.0.0.1:8765";
 }
 
+/** Base URL da API (para montar <img src> em URLs absolutas iguais ao fetch). */
+export const apiBase = base;
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!base) {
     throw new Error(

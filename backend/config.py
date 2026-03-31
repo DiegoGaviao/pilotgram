@@ -66,5 +66,31 @@ class Settings(BaseSettings):
     def use_supabase_for_token(self) -> bool:
         return bool(self.supabase_url.strip() and self.supabase_service_role_key.strip())
 
+    public_api_url: str = Field(
+        "",
+        validation_alias=AliasChoices("PG_PUBLIC_API_URL", "PUBLIC_API_URL"),
+    )
+    render_external_url: str = Field(
+        "",
+        validation_alias=AliasChoices("RENDER_EXTERNAL_URL"),
+    )
+    openai_api_key: str = Field(
+        "",
+        validation_alias=AliasChoices("OPENAI_API_KEY", "PG_OPENAI_API_KEY"),
+    )
+    openai_image_model: str = Field(
+        "dall-e-3",
+        validation_alias=AliasChoices("PG_OPENAI_IMAGE_MODEL", "OPENAI_IMAGE_MODEL"),
+    )
+
+    @property
+    def effective_public_api_base(self) -> str:
+        """Base URL HTTPS da API (para <img src=...> servido pelo próprio backend)."""
+        for candidate in (self.public_api_url, self.render_external_url):
+            c = (candidate or "").strip().rstrip("/")
+            if c:
+                return c
+        return ""
+
 
 settings = Settings()

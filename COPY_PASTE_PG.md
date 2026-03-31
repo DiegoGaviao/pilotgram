@@ -63,6 +63,13 @@ PG_API_HOST=0.0.0.0
 PG_API_PORT=8765
 PG_CORS_ORIGINS=https://www.dhawk.com.br,https://dhawk.com.br
 
+# URL HTTPS pública desta API (para o <img src> do criativo). No Render, RENDER_EXTERNAL_URL costuma bastar.
+# PG_PUBLIC_API_URL=https://pilotgram.onrender.com
+
+# Opcional: gerar imagem real via OpenAI Images (DALL·E), como nos teus testes com a API.
+# OPENAI_API_KEY=
+# PG_OPENAI_IMAGE_MODEL=dall-e-3
+
 # Supabase: mesmos valores do backend Leads (ou deixa PG_* vazio e usa SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY).
 PG_SUPABASE_URL=https://SEU_REF.supabase.co
 PG_SUPABASE_SERVICE_ROLE_KEY=

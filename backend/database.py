@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -144,6 +145,7 @@ async def _ensure_content_suggestions_columns(db: aiosqlite.Connection) -> None:
     additions: list[tuple[str, str]] = [
         ("creative_prompt", "TEXT"),
         ("creative_image_url", "TEXT"),
+        ("creative_fetch_token", "TEXT"),
         ("suggested_date", "TEXT"),
         ("frequency_per_week", "INTEGER"),
         ("focus_topic", "TEXT"),
@@ -175,17 +177,23 @@ async def _ensure_profile_brief_columns(db: aiosqlite.Connection) -> None:
 async def save_content_suggestions(
     ig_user_id: str,
     suggestions: list[dict[str, str | None]],
+    *,
+    public_api_base: str = "",
 ) -> list[dict]:
     now = datetime.now(timezone.utc).isoformat()
+    base = (public_api_base or "").strip().rstrip("/")
     rows: list[dict] = []
     async with aiosqlite.connect(_db_path()) as db:
         for s in suggestions:
+            token = secrets.token_urlsafe(20)
+            hosted_url = f"{base}/api/v1/meta/creatives/{token}" if base else None
             cur = await db.execute(
                 """
                 INSERT INTO content_suggestions (
                     ig_user_id, source_media_id, suggestion_text, rationale, status, created_at,
-                    creative_prompt, creative_image_url, suggested_date, frequency_per_week, focus_topic, language
-                ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+                    creative_prompt, creative_image_url, creative_fetch_token, suggested_date,
+                    frequency_per_week, focus_topic, language
+                ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ig_user_id,
@@ -194,7 +202,8 @@ async def save_content_suggestions(
                     s.get("rationale"),
                     now,
                     s.get("creative_prompt"),
-                    s.get("creative_image_url"),
+                    hosted_url,
+                    token,
                     s.get("suggested_date"),
                     s.get("frequency_per_week"),
                     s.get("focus_topic"),
@@ -212,7 +221,7 @@ async def save_content_suggestions(
                     "created_at": now,
                     "approved_at": None,
                     "creative_prompt": s.get("creative_prompt"),
-                    "creative_image_url": s.get("creative_image_url"),
+                    "creative_image_url": hosted_url,
                     "suggested_date": s.get("suggested_date"),
                     "frequency_per_week": s.get("frequency_per_week"),
                     "focus_topic": s.get("focus_topic"),
@@ -299,6 +308,27 @@ async def approve_content_suggestion(suggestion_id: int) -> dict | None:
                 "focus_topic": row[12],
                 "language": row[13],
             }
+
+
+async def get_suggestion_creative_context(token: str) -> dict | None:
+    async with aiosqlite.connect(_db_path()) as db:
+        async with db.execute(
+            "SELECT id, creative_prompt FROM content_suggestions WHERE creative_fetch_token = ?",
+            (token,),
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {"id": int(row[0]), "creative_prompt": str(row[1] or "")}
+
+
+async def update_suggestion_creative_image_url(suggestion_id: int, image_url: str) -> None:
+    async with aiosqlite.connect(_db_path()) as db:
+        await db.execute(
+            "UPDATE content_suggestions SET creative_image_url = ? WHERE id = ?",
+            (image_url, suggestion_id),
+        )
+        await db.commit()
 
 
 async def upsert_profile_dna(

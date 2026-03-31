@@ -6,14 +6,15 @@ Token: Supabase (`pilotgram_oauth_solo`) ou SQLite local.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from urllib.parse import quote, quote_plus
+from xml.sax.saxutils import escape as xml_escape
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from config import settings
@@ -24,13 +25,16 @@ from database import (
     get_profile_dna,
     get_solo_session_meta,
     get_solo_token,
+    get_suggestion_creative_context,
     list_content_suggestions,
     save_content_suggestions,
     save_solo_token,
+    update_suggestion_creative_image_url,
     upsert_profile_brief,
     upsert_profile_dna,
 )
 from services import meta_graph as graph
+from services import openai_image
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +42,29 @@ router = APIRouter(prefix="/api/v1/meta", tags=["meta"])
 
 # state OAuth (curto prazo; não precisa persistir)
 _dev_state_to_user: dict[str, str] = {}
+
+
+def _creative_preview_svg_bytes(prompt: str) -> bytes:
+    """SVG servido pela API (evita CSP do site que bloqueia data: em <img>)."""
+    p = (prompt or "").strip() or "Pilotgram — preview do criativo"
+    line1 = xml_escape(p[:110] + ("…" if len(p) > 110 else ""))
+    line2_xml = ""
+    if len(p) > 110:
+        line2 = xml_escape(p[110:230] + ("…" if len(p) > 230 else ""))
+        line2_xml = (
+            f'<text x="540" y="530" text-anchor="middle" fill="#94a3b8" '
+            f'font-size="26" font-family="system-ui,sans-serif">{line2}</text>'
+        )
+    svg = f"""<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#1e293b"/>
+</linearGradient></defs>
+<rect width="100%" height="100%" fill="url(#g)"/>
+<text x="540" y="480" text-anchor="middle" fill="#e2e8f0" font-size="32" font-family="system-ui,sans-serif">{line1}</text>
+{line2_xml}
+</svg>"""
+    return svg.encode("utf-8")
 
 
 class AuthorizeUrlResponse(BaseModel):
@@ -409,25 +436,13 @@ def _build_suggestions_from_media(
             f"{'tone ' + tone_style + ', ' if tone_style else ''}"
             f"no text in image, clean composition, mobile-friendly, {post_type.lower()} style."
         )
-        img_label = f"{(focus_topic or focus)[:28]} | {angle[:24]}"
-        svg = (
-            "<svg xmlns='http://www.w3.org/2000/svg' width='1080' height='1080'>"
-            "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
-            "<stop offset='0%' stop-color='#0f172a'/><stop offset='100%' stop-color='#1e293b'/>"
-            "</linearGradient></defs>"
-            "<rect width='100%' height='100%' fill='url(#g)'/>"
-            "<text x='50%' y='46%' text-anchor='middle' fill='#e2e8f0' font-size='44' font-family='Arial'>Creative Preview</text>"
-            f"<text x='50%' y='53%' text-anchor='middle' fill='#94a3b8' font-size='28' font-family='Arial'>{img_label}</text>"
-            "</svg>"
-        )
-        creative_image_url = f"data:image/svg+xml;utf8,{quote(svg)}"
         out.append(
             {
                 "source_media_id": str(m.get("id")) if m.get("id") else None,
                 "suggestion_text": suggestion_text,
                 "rationale": f"Tema: {focus_topic or focus} · Ângulo: {angle} · Formato: {post_type}.",
                 "creative_prompt": creative_prompt,
-                "creative_image_url": creative_image_url,
+                "creative_image_url": None,
                 "suggested_date": day.isoformat(),
                 "frequency_per_week": frequency_per_week,
                 "focus_topic": focus_topic or focus,
@@ -607,6 +622,20 @@ async def ig_media_with_insights(
     return {"data": enriched, "count": len(enriched)}
 
 
+@router.get("/creatives/{token}")
+async def serve_creative_preview(token: str) -> Response:
+    """Imagem de preview (SVG) — URL pública opaca; não expõe dados além do prompt salvo."""
+    ctx = await get_suggestion_creative_context(token)
+    if not ctx:
+        raise HTTPException(status_code=404, detail="criativo não encontrado")
+    body = _creative_preview_svg_bytes(str(ctx.get("creative_prompt") or ""))
+    return Response(
+        content=body,
+        media_type="image/svg+xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
 @router.post("/ig/{ig_user_id}/suggestions/generate", response_model=SuggestionGenerateResponse)
 async def generate_suggestions(
     ig_user_id: str,
@@ -636,7 +665,29 @@ async def generate_suggestions(
         dna=dna_saved,
         brief=brief_saved,
     )
-    saved = await save_content_suggestions(ig_user_id, draft)
+    public_base = settings.effective_public_api_base
+    saved = await save_content_suggestions(ig_user_id, draft, public_api_base=public_base)
+    if not public_base:
+        logger.warning(
+            "PG_PUBLIC_API_URL / RENDER_EXTERNAL_URL vazio — creative_image_url ficará vazio até configurar a URL pública da API."
+        )
+
+    if (settings.openai_api_key or "").strip():
+        sem = asyncio.Semaphore(2)
+
+        async def enhance_creative(row: dict) -> None:
+            async with sem:
+                url = await openai_image.generate_image_url(
+                    settings.openai_api_key,
+                    str(row.get("creative_prompt") or ""),
+                    model=settings.openai_image_model,
+                )
+                if url:
+                    await update_suggestion_creative_image_url(int(row["id"]), url)
+                    row["creative_image_url"] = url
+
+        await asyncio.gather(*[enhance_creative(r) for r in saved])
+
     return SuggestionGenerateResponse(generated=len(saved), data=[SuggestionItem(**s) for s in saved])
 
 
