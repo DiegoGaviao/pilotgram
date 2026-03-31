@@ -123,6 +123,7 @@ class ProfileDnaResponse(BaseModel):
     themes: list[str]
     tone_hint: str
     cta_hint: str
+    language_hint: str = "pt"
     updated_at: str
 
 
@@ -139,6 +140,7 @@ class ProfileBriefBody(BaseModel):
 class ProfileBriefResponse(ProfileBriefBody):
     ig_user_id: str
     updated_at: str
+    filled_from_dna: bool = False
 
 
 def _short_caption(caption: str | None) -> str:
@@ -476,6 +478,37 @@ def _derive_dna_from_media(ig_user_id: str, media_items: list[dict[str, Any]]) -
         "themes": _extract_keywords(ranked, limit=8),
         "tone_hint": _tone_hint(ranked),
         "cta_hint": _best_cta(ranked),
+        "language_hint": _detect_language(ranked),
+    }
+
+
+def _suggested_brief_fields_from_dna(dna: dict[str, Any]) -> dict[str, str]:
+    """Preenche lacunas do questionário com sinais extraídos das publicações (DNA)."""
+    themes: list[str] = list(dna.get("themes") or [])
+    niche = ", ".join(themes[:6]) if themes else ""
+    tone = str(dna.get("tone_hint") or "")
+    tone = re.sub(r"^tom de voz:\s*", "", tone, flags=re.I).strip()
+    cta = str(dna.get("cta_hint") or "")
+    cta = re.sub(r"^cta:\s*", "", cta, flags=re.I).strip()
+    raw_lang = str(dna.get("language_hint") or "pt").strip().lower()
+    lang = "en" if raw_lang == "en" else "pt"
+    return {
+        "niche": niche,
+        "target_audience": (
+            "Suggested from recent posts — adjust to your real audience."
+            if lang == "en"
+            else "Sugestão a partir das publicações recentes — ajuste ao seu público real."
+        ),
+        "objective": (
+            "Growth, authority and conversion on Instagram — refine to your goal."
+            if lang == "en"
+            else "Crescimento, autoridade e conversão no Instagram — refine conforme a sua meta."
+        ),
+        "offer_summary": cta,
+        "preferred_language": lang,
+        "tone_style": tone
+        or ("direct, authentic" if lang == "en" else "direto, autêntico"),
+        "do_not_use_terms": "",
     }
 
 
@@ -654,6 +687,7 @@ async def generate_suggestions(
         themes=list(dna_input["themes"]),
         tone_hint=str(dna_input["tone_hint"]),
         cta_hint=str(dna_input["cta_hint"]),
+        language_hint=str(dna_input.get("language_hint") or "pt"),
     )
     brief_saved = await get_profile_brief(ig_user_id)
     draft = _build_suggestions_from_media(
@@ -702,7 +736,14 @@ async def get_dna(ig_user_id: str) -> ProfileDnaResponse:
     row = await get_profile_dna(ig_user_id)
     if not row:
         raise HTTPException(status_code=404, detail="DNA ainda não gerado para este perfil")
-    return ProfileDnaResponse(**row)
+    return ProfileDnaResponse(
+        ig_user_id=str(row["ig_user_id"]),
+        themes=list(row.get("themes") or []),
+        tone_hint=str(row.get("tone_hint") or ""),
+        cta_hint=str(row.get("cta_hint") or ""),
+        language_hint=str(row.get("language_hint") or "pt"),
+        updated_at=str(row.get("updated_at") or ""),
+    )
 
 
 @router.put("/ig/{ig_user_id}/brief", response_model=ProfileBriefResponse)
@@ -722,20 +763,46 @@ async def put_brief(ig_user_id: str, body: ProfileBriefBody) -> ProfileBriefResp
 
 @router.get("/ig/{ig_user_id}/brief", response_model=ProfileBriefResponse)
 async def get_brief(ig_user_id: str) -> ProfileBriefResponse:
+    """Devolve o último briefing gravado; campos vazios são preenchidos com sugestões do DNA (posts recentes)."""
     row = await get_profile_brief(ig_user_id)
-    if not row:
-        return ProfileBriefResponse(
-            ig_user_id=ig_user_id,
-            niche="",
-            target_audience="",
-            objective="",
-            offer_summary="",
-            preferred_language="",
-            tone_style="",
-            do_not_use_terms="",
-            updated_at=datetime.now(timezone.utc).isoformat(),
-        )
-    return ProfileBriefResponse(**row)
+    dna = await get_profile_dna(ig_user_id)
+    now = datetime.now(timezone.utc).isoformat()
+    keys = [
+        "niche",
+        "target_audience",
+        "objective",
+        "offer_summary",
+        "preferred_language",
+        "tone_style",
+        "do_not_use_terms",
+    ]
+    data: dict[str, str] = {k: "" for k in keys}
+    updated_at = now
+    if row:
+        for k in keys:
+            data[k] = str(row.get(k) or "").strip()
+        updated_at = str(row.get("updated_at") or now)
+    filled_from_dna = False
+    if dna:
+        sug = _suggested_brief_fields_from_dna(dna)
+        for k in keys:
+            if not (data.get(k) or "").strip():
+                v = (sug.get(k) or "").strip()
+                if v:
+                    data[k] = v
+                    filled_from_dna = True
+    return ProfileBriefResponse(
+        ig_user_id=ig_user_id,
+        updated_at=updated_at,
+        filled_from_dna=filled_from_dna,
+        niche=data["niche"],
+        target_audience=data["target_audience"],
+        objective=data["objective"],
+        offer_summary=data["offer_summary"],
+        preferred_language=data["preferred_language"],
+        tone_style=data["tone_style"],
+        do_not_use_terms=data["do_not_use_terms"],
+    )
 
 
 @router.post("/suggestions/{suggestion_id}/approve", response_model=SuggestionItem)

@@ -31,6 +31,7 @@ type ProfileDna = {
   themes: string[];
   tone_hint: string;
   cta_hint: string;
+  language_hint?: string;
   updated_at: string;
 };
 type ProfileBrief = {
@@ -43,7 +44,58 @@ type ProfileBrief = {
   tone_style: string;
   do_not_use_terms: string;
   updated_at: string;
+  /** True quando campos vazios foram preenchidos pela análise do DNA (posts). */
+  filled_from_dna?: boolean;
 };
+
+const BRIEF_LS_PREFIX = "pilotgram.brief.v1.";
+
+function briefLocalKey(ig: string) {
+  return `${BRIEF_LS_PREFIX}${ig}`;
+}
+
+function mergeBriefWithLocalStorage(ig: string, apiBrief: ProfileBrief): ProfileBrief {
+  let merged: ProfileBrief = { ...apiBrief };
+  try {
+    const raw = localStorage.getItem(briefLocalKey(ig));
+    if (!raw) return merged;
+    const loc = JSON.parse(raw) as Partial<ProfileBrief>;
+    const keys = [
+      "niche",
+      "target_audience",
+      "objective",
+      "offer_summary",
+      "preferred_language",
+      "tone_style",
+      "do_not_use_terms",
+    ] as const;
+    for (const k of keys) {
+      const apiEmpty = !(merged[k] ?? "").trim();
+      const locVal = (loc[k] ?? "").toString().trim();
+      if (apiEmpty && locVal) merged = { ...merged, [k]: locVal };
+    }
+  } catch {
+    /* ignore */
+  }
+  return merged;
+}
+
+function persistBriefLocal(ig: string, b: ProfileBrief) {
+  try {
+    const payload = {
+      niche: b.niche,
+      target_audience: b.target_audience,
+      objective: b.objective,
+      offer_summary: b.offer_summary,
+      preferred_language: b.preferred_language,
+      tone_style: b.tone_style,
+      do_not_use_terms: b.do_not_use_terms,
+    };
+    localStorage.setItem(briefLocalKey(ig), JSON.stringify(payload));
+  } catch {
+    /* ignore */
+  }
+}
 
 export default function Dashboard() {
   const [pages, setPages] = useState<PageIg[] | null>(null);
@@ -92,7 +144,7 @@ export default function Dashboard() {
         setMedia(res.data);
         setSuggestions(sres.data);
         setDna(dres);
-        setBrief(
+        const baseBrief: ProfileBrief =
           bres ?? {
             ig_user_id: selectedIg,
             niche: "",
@@ -103,8 +155,9 @@ export default function Dashboard() {
             tone_style: "",
             do_not_use_terms: "",
             updated_at: "",
-          }
-        );
+            filled_from_dna: false,
+          };
+        setBrief(mergeBriefWithLocalStorage(selectedIg, baseBrief));
         setErr(null);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
@@ -121,6 +174,22 @@ export default function Dashboard() {
     setGenerating(true);
     setErr(null);
     try {
+      if (brief) {
+        const savedBrief = await api<ProfileBrief>(`/api/v1/meta/ig/${selectedIg}/brief`, {
+          method: "PUT",
+          body: JSON.stringify({
+            niche: brief.niche,
+            target_audience: brief.target_audience,
+            objective: brief.objective,
+            offer_summary: brief.offer_summary,
+            preferred_language: brief.preferred_language,
+            tone_style: brief.tone_style,
+            do_not_use_terms: brief.do_not_use_terms,
+          }),
+        });
+        setBrief(mergeBriefWithLocalStorage(selectedIg, savedBrief));
+        persistBriefLocal(selectedIg, savedBrief);
+      }
       const res = await api<{ data: SuggestionRow[] }>(
         `/api/v1/meta/ig/${selectedIg}/suggestions/generate?count=5&frequency_per_week=${frequencyPerWeek}&focus_topic=${encodeURIComponent(
           focusTopic
@@ -131,6 +200,8 @@ export default function Dashboard() {
       setSuggestions(res.data);
       const dres = await api<ProfileDna>(`/api/v1/meta/ig/${selectedIg}/dna`).catch(() => null);
       setDna(dres);
+      const b2 = await api<ProfileBrief>(`/api/v1/meta/ig/${selectedIg}/brief`).catch(() => null);
+      if (b2) setBrief(mergeBriefWithLocalStorage(selectedIg, b2));
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -156,6 +227,7 @@ export default function Dashboard() {
         }),
       });
       setBrief(saved);
+      persistBriefLocal(selectedIg, saved);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -265,7 +337,19 @@ export default function Dashboard() {
           )}
           {brief && (
             <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-300">
-              <p className="mb-2 font-medium text-slate-200">Questionário estratégico da página</p>
+              <p className="mb-1 font-medium text-slate-200">Questionário estratégico da página</p>
+              {brief.updated_at ? (
+                <p className="mb-2 text-[11px] text-slate-500">
+                  Última gravação no servidor: {brief.updated_at}
+                </p>
+              ) : null}
+              {brief.filled_from_dna ? (
+                <p className="mb-2 text-[11px] text-amber-500/95">
+                  Parte do texto veio da análise automática dos posts (DNA). Revise e use &quot;Atualizar
+                  questionário&quot; para gravar no servidor, ou gere sugestões — o que está no formulário é o que
+                  será usado ao gerar.
+                </p>
+              ) : null}
               <div className="grid gap-2 md:grid-cols-2">
                 <input
                   value={brief.niche}

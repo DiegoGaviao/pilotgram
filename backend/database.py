@@ -68,6 +68,7 @@ async def init_db() -> None:
         # Migração leve para ambientes que já tinham a tabela criada.
         await _ensure_content_suggestions_columns(db)
         await _ensure_profile_brief_columns(db)
+        await _ensure_profile_dna_columns(db)
         await db.commit()
     if settings.use_supabase_for_token:
         logger.info("Token store: Supabase (pg_oauth_solo) + SQLite para robôs em %s", path)
@@ -154,6 +155,15 @@ async def _ensure_content_suggestions_columns(db: aiosqlite.Connection) -> None:
     for name, col_type in additions:
         if name not in cols:
             await db.execute(f"ALTER TABLE content_suggestions ADD COLUMN {name} {col_type}")
+
+
+async def _ensure_profile_dna_columns(db: aiosqlite.Connection) -> None:
+    async with db.execute("PRAGMA table_info(profile_dna)") as cur:
+        cols = {str(row[1]) async for row in cur}
+    if "language_hint" not in cols:
+        await db.execute(
+            "ALTER TABLE profile_dna ADD COLUMN language_hint TEXT NOT NULL DEFAULT 'pt'"
+        )
 
 
 async def _ensure_profile_brief_columns(db: aiosqlite.Connection) -> None:
@@ -336,21 +346,24 @@ async def upsert_profile_dna(
     themes: list[str],
     tone_hint: str,
     cta_hint: str,
+    language_hint: str = "pt",
 ) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     themes_csv = ",".join([t.strip() for t in themes if t.strip()])
+    lang = (language_hint or "pt").strip()[:8] or "pt"
     async with aiosqlite.connect(_db_path()) as db:
         await db.execute(
             """
-            INSERT INTO profile_dna (ig_user_id, themes, tone_hint, cta_hint, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO profile_dna (ig_user_id, themes, tone_hint, cta_hint, language_hint, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(ig_user_id) DO UPDATE SET
               themes = excluded.themes,
               tone_hint = excluded.tone_hint,
               cta_hint = excluded.cta_hint,
+              language_hint = excluded.language_hint,
               updated_at = excluded.updated_at
             """,
-            (ig_user_id, themes_csv, tone_hint, cta_hint, now),
+            (ig_user_id, themes_csv, tone_hint, cta_hint, lang, now),
         )
         await db.commit()
     return {
@@ -358,6 +371,7 @@ async def upsert_profile_dna(
         "themes": [x for x in themes_csv.split(",") if x],
         "tone_hint": tone_hint,
         "cta_hint": cta_hint,
+        "language_hint": lang,
         "updated_at": now,
     }
 
@@ -366,7 +380,7 @@ async def get_profile_dna(ig_user_id: str) -> dict | None:
     async with aiosqlite.connect(_db_path()) as db:
         async with db.execute(
             """
-            SELECT ig_user_id, themes, tone_hint, cta_hint, updated_at
+            SELECT ig_user_id, themes, tone_hint, cta_hint, language_hint, updated_at
             FROM profile_dna
             WHERE ig_user_id = ?
             """,
@@ -381,7 +395,8 @@ async def get_profile_dna(ig_user_id: str) -> dict | None:
                 "themes": themes,
                 "tone_hint": str(row[2]),
                 "cta_hint": str(row[3]),
-                "updated_at": str(row[4]),
+                "language_hint": str(row[4] or "pt"),
+                "updated_at": str(row[5]),
             }
 
 
