@@ -50,6 +50,8 @@ type ProfileBrief = {
 };
 
 const BRIEF_LS_PREFIX = "pilotgram.brief.v1.";
+/** Lembra qual IG estava selecionado (evita voltar sempre à 1.ª página da lista). */
+const LAST_SELECTED_IG_KEY = "pilotgram.selected_ig.v1";
 
 function briefLocalKey(ig: string) {
   return `${BRIEF_LS_PREFIX}${ig}`;
@@ -273,8 +275,26 @@ export default function Dashboard() {
       try {
         const list = await api<PageIg[]>("/api/v1/meta/pages");
         setPages(list);
-        const firstIg = list.find((p) => p.ig_user_id)?.ig_user_id;
-        if (firstIg) setSelectedIg(firstIg);
+        let pick: string | null = null;
+        try {
+          const remembered = sessionStorage.getItem(LAST_SELECTED_IG_KEY)?.trim();
+          if (remembered && list.some((p) => p.ig_user_id === remembered)) {
+            pick = remembered;
+          }
+        } catch {
+          /* ignore */
+        }
+        if (!pick) {
+          pick = list.find((p) => p.ig_user_id)?.ig_user_id ?? null;
+        }
+        if (pick) {
+          try {
+            sessionStorage.setItem(LAST_SELECTED_IG_KEY, pick);
+          } catch {
+            /* ignore */
+          }
+          setSelectedIg(pick);
+        }
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       }
@@ -291,6 +311,12 @@ export default function Dashboard() {
     }
     const ig = selectedIg;
     const seq = ++profileLoadSeq.current;
+
+    // Limpa já — senão, se o /brief antigo for cancelado por seq, ficam mídias de uma página e questionário de outra.
+    setMedia([]);
+    setSuggestions([]);
+    setDna(null);
+    setBrief(null);
 
     void (async () => {
       try {
@@ -459,7 +485,16 @@ export default function Dashboard() {
               {p.ig_user_id ? (
                 <button
                   type="button"
-                  onClick={() => setSelectedIg(p.ig_user_id)}
+                  onClick={() => {
+                    const id = p.ig_user_id;
+                    if (!id) return;
+                    try {
+                      sessionStorage.setItem(LAST_SELECTED_IG_KEY, id);
+                    } catch {
+                      /* ignore */
+                    }
+                    setSelectedIg(id);
+                  }}
                   className="mt-1 text-left text-xs text-slate-400 hover:text-emerald-400"
                 >
                   @{p.ig_username ?? p.ig_user_id} — clique para ver mídias
