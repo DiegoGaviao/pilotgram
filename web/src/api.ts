@@ -38,6 +38,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`${base}${path}`, {
     ...init,
     headers,
+    credentials: "omit",
     // Evita respostas antigas do questionário / brief em cache do browser ou CDN intermédia.
     cache: init?.cache ?? "no-store",
   });

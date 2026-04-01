@@ -30,16 +30,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# União com os dois hostnames Dhawk: no Render, PG_CORS_ORIGINS às vezes fica só com www
-# e o browser em https://dhawk.com.br bloqueia com "No Access-Control-Allow-Origin".
-_DHAWK = frozenset({"https://www.dhawk.com.br", "https://dhawk.com.br"})
-_env = {o.strip() for o in settings.cors_origins.split(",") if o.strip()}
-_cors_origins = sorted(_env | _DHAWK)
+# CORS estável para o SPA (dhawk, preview, localhost com VITE_PG_API_URL):
+# o dashboard não envia cookies para pilotgram.onrender.com — com credentials=False
+# o browser aceita Access-Control-Allow-Origin: * e o preflight PUT/POST deixa de falhar
+# por lista/regex de origens (www vs sem www, subpath, etc.).
+# PG_CORS_ORIGINS no .env continua documentado no COPY_PASTE_PG.md; não é obrigatório para CORS com *.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_origin_regex=r"^https://(www\.)?dhawk\.com\.br$",
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -62,7 +61,7 @@ async def health() -> dict:
         "public_api_base_configured": bool(settings.effective_public_api_base),
         "public_api_base": settings.effective_public_api_base or None,
         "openai_image_configured": bool((settings.openai_api_key or "").strip()),
-        "caption_engine_version": "post-ready-v3-cors-restored-2026-04-01",
+        "caption_engine_version": "post-ready-v3-unified-2026-04-01",
     }
 
 

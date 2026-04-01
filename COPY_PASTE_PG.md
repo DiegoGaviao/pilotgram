@@ -13,7 +13,7 @@ Sim, para **Supabase** e chaves já partilhadas (IA, Resend, etc.): usa o **mesm
 |--------|-----------|
 | **Postgres / URL / keys** | Mesmo `SUPABASE_URL`, **service role** no backend e **anon** no front — ou os equivalentes `PG_SUPABASE_*` / `VITE_PG_SUPABASE_*` com **os mesmos valores**. |
 | **Backend** | `backend/config.py` aceita **`PG_SUPABASE_*` ou `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`** (e o alias `SUPABASE_KEY` como no Render do Leads). |
-| **Só Pilotgram** | `META_OAUTH_REDIRECT_URI` deste produto, `PG_CORS_ORIGINS`, e na Meta o redirect extra do Pilotgram. `META_APP_ID` / `META_APP_SECRET` podem ser os **mesmos** do Leads se for o mesmo app. |
+| **Só Pilotgram** | `META_OAUTH_REDIRECT_URI` deste produto, e na Meta o redirect extra do Pilotgram. `META_APP_ID` / `META_APP_SECRET` podem ser os **mesmos** do Leads se for o mesmo app. (`PG_CORS_ORIGINS` é opcional: a API usa CORS `*` + `credentials` omit no fetch.) |
 | **Tabelas** | Leads usa `la_*` (etc.); Pilotgram usa **`pg_*`** — convivem no mesmo Supabase. |
 
 ---
@@ -117,6 +117,17 @@ VITE_PG_SUPABASE_ANON_KEY=
 ```
 ────────── COPIAR ATÉ AQUI ──────────
 ```
+
+---
+
+## Checklist — tudo o que o produto assume (para “funcionar tudo”)
+
+1. **API no Render** deployada do `main`; `GET /health` com `caption_engine_version` = `post-ready-v3-unified-2026-04-01` (ou mais recente).
+2. **CORS:** API com `allow_origins=["*"]` e `allow_credentials=False`; front com `fetch` **sem** cookies (`credentials: omit` em `web/src/api.ts`). O token Meta **não** vai no browser.
+3. **Front no Hostinger:** `npm run build` com `VITE_PG_API_URL=https://pilotgram.onrender.com` (ou a URL real da API, sem barra final).
+4. **Supabase:** tabelas `pg_oauth_solo` + `pg_profile_brief`; variáveis `PG_SUPABASE_*` ou `SUPABASE_*` no Render.
+5. **OpenAI (opcional):** `OPENAI_API_KEY` no Render → legendas via Chat + imagens DALL·E; sem chave → legendas estáticas + SVG de preview.
+6. **Dashboard:** questionário grava com **Atualizar questionário** ou ao **Gerar** (PUT antes do POST); troca de página Instagram limpa estado para não misturar briefs; idioma **English** / **Português** / **Auto** no select.
 
 ---
 
