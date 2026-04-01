@@ -279,29 +279,37 @@ export default function Dashboard() {
       setMedia([]);
       setSuggestions([]);
       setDna(null);
+      setBrief(null);
       return;
     }
+    const ig = selectedIg;
+    let cancelled = false;
+
     void (async () => {
       try {
         const [res, sres] = await Promise.all([
-          api<{ data: MediaRow[] }>(`/api/v1/meta/ig/${selectedIg}/media-with-insights?limit=8`),
-          api<{ data: SuggestionRow[] }>(`/api/v1/meta/ig/${selectedIg}/suggestions`),
+          api<{ data: MediaRow[] }>(`/api/v1/meta/ig/${ig}/media-with-insights?limit=8`),
+          api<{ data: SuggestionRow[] }>(`/api/v1/meta/ig/${ig}/suggestions`),
         ]);
+        if (cancelled) return;
         setMedia(res.data);
         setSuggestions(sres.data);
 
-        let dres = await api<ProfileDna>(`/api/v1/meta/ig/${selectedIg}/dna`).catch(() => null);
+        let dres = await api<ProfileDna>(`/api/v1/meta/ig/${ig}/dna`).catch(() => null);
+        if (cancelled) return;
         if (!dres && res.data.length > 0) {
-          dres = await api<ProfileDna>(`/api/v1/meta/ig/${selectedIg}/dna/refresh`, {
+          dres = await api<ProfileDna>(`/api/v1/meta/ig/${ig}/dna/refresh`, {
             method: "POST",
           }).catch(() => null);
         }
+        if (cancelled) return;
         setDna(dres);
 
-        const bres = await api<ProfileBrief>(`/api/v1/meta/ig/${selectedIg}/brief`).catch(() => null);
+        const bres = await api<ProfileBrief>(`/api/v1/meta/ig/${ig}/brief`).catch(() => null);
+        if (cancelled) return;
         const baseBrief: ProfileBrief =
           bres ?? {
-            ig_user_id: selectedIg,
+            ig_user_id: ig,
             niche: "",
             target_audience: "",
             objective: "",
@@ -312,11 +320,12 @@ export default function Dashboard() {
             updated_at: "",
             filled_from_dna: false,
           };
-        const mergedBrief = mergeBriefWithLocalStorage(selectedIg, baseBrief);
+        const mergedBrief = mergeBriefWithLocalStorage(ig, baseBrief);
         setBrief(mergedBrief);
-        persistBriefLocal(selectedIg, mergedBrief);
+        persistBriefLocal(ig, mergedBrief);
         setErr(null);
       } catch (e) {
+        if (cancelled) return;
         setErr(e instanceof Error ? e.message : String(e));
         setMedia([]);
         setSuggestions([]);
@@ -324,6 +333,10 @@ export default function Dashboard() {
         setBrief(null);
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedIg]);
 
   async function generateSuggestions() {
@@ -344,8 +357,9 @@ export default function Dashboard() {
             do_not_use_terms: brief.do_not_use_terms,
           }),
         });
-        setBrief(mergeBriefWithLocalStorage(selectedIg, savedBrief));
-        persistBriefLocal(selectedIg, savedBrief);
+        const mergedAfterPut = mergeBriefWithLocalStorage(selectedIg, savedBrief);
+        setBrief(mergedAfterPut);
+        persistBriefLocal(selectedIg, mergedAfterPut);
       }
       const res = await api<{ data: SuggestionRow[] }>(
         `/api/v1/meta/ig/${selectedIg}/suggestions/generate?count=5&frequency_per_week=${frequencyPerWeek}&focus_topic=${encodeURIComponent(
@@ -358,7 +372,11 @@ export default function Dashboard() {
       const dres = await api<ProfileDna>(`/api/v1/meta/ig/${selectedIg}/dna`).catch(() => null);
       setDna(dres);
       const b2 = await api<ProfileBrief>(`/api/v1/meta/ig/${selectedIg}/brief`).catch(() => null);
-      if (b2) setBrief(mergeBriefWithLocalStorage(selectedIg, b2));
+      if (b2) {
+        const merged = mergeBriefWithLocalStorage(selectedIg, b2);
+        setBrief(merged);
+        persistBriefLocal(selectedIg, merged);
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -383,8 +401,9 @@ export default function Dashboard() {
           do_not_use_terms: brief.do_not_use_terms,
         }),
       });
-      setBrief(mergeBriefWithLocalStorage(selectedIg, saved));
-      persistBriefLocal(selectedIg, saved);
+      const mergedSaved = mergeBriefWithLocalStorage(selectedIg, saved);
+      setBrief(mergedSaved);
+      persistBriefLocal(selectedIg, mergedSaved);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
