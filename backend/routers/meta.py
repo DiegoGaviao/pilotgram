@@ -464,11 +464,14 @@ def _build_suggestions_from_media(
             suggestion_text = caption_core if not hashtags_block else f"{caption_core}\n\n{hashtags_block}"
         suggestion_text = clean_blocked(suggestion_text)
         creative_prompt = (
-            f"Instagram post cover concept for {niche or focus_topic or focus}, angle {angle}, "
+            f"Secular Instagram cover for {niche or focus_topic or focus}, angle {angle}, "
             f"{'English-speaking' if lang == 'en' else 'Brazilian Portuguese'} audience, "
             f"{'tone ' + tone_style + ', ' if tone_style else ''}"
-            f"clean composition, mobile-friendly, {post_type.lower()} style, symbolic scene only, "
-            f"STRICTLY no words, no letters, no numbers, no typography, no logos, no watermark, no UI."
+            f"everyday real-world scene (home, desk, walk, daylight), emotionally grounded, "
+            f"no esoteric or mystical visuals, no cosmic diagrams, no new-age spirituality, "
+            f"no religious symbols except Roman Catholic if faith is clearly part of the brand — otherwise fully secular. "
+            f"clean composition, mobile-friendly, {post_type.lower()} style, "
+            f"no words, no letters, no panel labels, no UI, no logos."
         )
         debug_trace = {
             "stage_1_inputs": {
