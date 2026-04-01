@@ -122,6 +122,19 @@ function persistBriefLocal(ig: string, b: ProfileBrief) {
   }
 }
 
+function humanActionError(msg: string): string {
+  const m = msg.trim();
+  if (
+    m === "Failed to fetch" ||
+    m.includes("Failed to fetch") ||
+    m.includes("NetworkError") ||
+    m.includes("Load failed")
+  ) {
+    return "Sem resposta da API (rede, CORS ou servidor a acordar no Render). Isto costuma ser o botão Gravar/Gerar, não a lista de posts em baixo — tenta de novo em 20–40 s.";
+  }
+  return m;
+}
+
 function briefAllFieldsEmpty(b: ProfileBrief): boolean {
   return ![
     b.niche,
@@ -266,6 +279,8 @@ export default function Dashboard() {
   const [savingBrief, setSavingBrief] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  /** Falhas de PUT/POST (gravar / gerar / aprovar) — não confundir com falha ao listar posts. */
+  const [actionErr, setActionErr] = useState<string | null>(null);
   const needsReconnect = !!err && err.startsWith("401:");
   /** Só o último carregamento por IG aplica setState (evita Strict Mode / troca rápida de conta). */
   const profileLoadSeq = useRef(0);
@@ -295,6 +310,7 @@ export default function Dashboard() {
           }
           setSelectedIg(pick);
         }
+        setErr(null);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       }
@@ -356,6 +372,7 @@ export default function Dashboard() {
         const mergedBrief = mergeBriefWithLocalStorage(ig, baseBrief);
         setBrief(mergedBrief);
         setErr(null);
+        setActionErr(null);
       } catch (e) {
         if (seq !== profileLoadSeq.current) return;
         setErr(e instanceof Error ? e.message : String(e));
@@ -370,7 +387,7 @@ export default function Dashboard() {
   async function generateSuggestions() {
     if (!selectedIg) return;
     setGenerating(true);
-    setErr(null);
+    setActionErr(null);
     try {
       if (brief) {
         const savedBrief = await api<ProfileBrief>(`/api/v1/meta/ig/${selectedIg}/brief`, {
@@ -405,8 +422,11 @@ export default function Dashboard() {
         setBrief(merged);
         persistBriefLocal(selectedIg, merged);
       }
+      setActionErr(null);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.startsWith("401:")) setErr(msg);
+      else setActionErr(msg);
     } finally {
       setGenerating(false);
     }
@@ -415,7 +435,7 @@ export default function Dashboard() {
   async function saveBrief() {
     if (!selectedIg || !brief) return;
     setSavingBrief(true);
-    setErr(null);
+    setActionErr(null);
     try {
       const saved = await api<ProfileBrief>(`/api/v1/meta/ig/${selectedIg}/brief`, {
         method: "PUT",
@@ -432,8 +452,11 @@ export default function Dashboard() {
       const mergedSaved = mergeBriefWithLocalStorage(selectedIg, saved);
       setBrief(mergedSaved);
       persistBriefLocal(selectedIg, mergedSaved);
+      setActionErr(null);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.startsWith("401:")) setErr(msg);
+      else setActionErr(msg);
     } finally {
       setSavingBrief(false);
     }
@@ -441,14 +464,17 @@ export default function Dashboard() {
 
   async function approveSuggestion(id: number) {
     setApprovingId(id);
-    setErr(null);
+    setActionErr(null);
     try {
       const row = await api<SuggestionRow>(`/api/v1/meta/suggestions/${id}/approve`, {
         method: "POST",
       });
       setSuggestions((prev) => prev.map((s) => (s.id === id ? row : s)));
+      setActionErr(null);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.startsWith("401:")) setErr(msg);
+      else setActionErr(msg);
     } finally {
       setApprovingId(null);
     }
@@ -511,34 +537,39 @@ export default function Dashboard() {
 
       {selectedIg && (
         <section className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-medium text-slate-200">Sugestões dos robôs (MVP)</h2>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                value={focusTopic}
-                onChange={(e) => setFocusTopic(e.target.value)}
-                className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                placeholder="Foco do perfil"
-              />
-              <select
-                value={frequencyPerWeek}
-                onChange={(e) => setFrequencyPerWeek(Number(e.target.value))}
-                className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-              >
-                <option value={2}>2x/semana</option>
-                <option value={3}>3x/semana</option>
-                <option value={4}>4x/semana</option>
-                <option value={5}>5x/semana</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => void generateSuggestions()}
-                disabled={generating}
-                className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-              >
-                {generating ? "Gerando..." : "Gerar sugestões IA"}
-              </button>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-lg font-medium text-slate-200">Sugestões dos robôs (MVP)</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={focusTopic}
+                  onChange={(e) => setFocusTopic(e.target.value)}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                  placeholder="Foco do perfil"
+                />
+                <select
+                  value={frequencyPerWeek}
+                  onChange={(e) => setFrequencyPerWeek(Number(e.target.value))}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                >
+                  <option value={2}>2x/semana</option>
+                  <option value={3}>3x/semana</option>
+                  <option value={4}>4x/semana</option>
+                  <option value={5}>5x/semana</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void generateSuggestions()}
+                  disabled={generating}
+                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {generating ? "Gerando..." : "Gerar sugestões IA"}
+                </button>
+              </div>
             </div>
+            {actionErr ? (
+              <p className="max-w-xl text-xs text-amber-500">{humanActionError(actionErr)}</p>
+            ) : null}
           </div>
           {dna && (
             <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-300">
@@ -717,7 +748,9 @@ export default function Dashboard() {
           <h2 className="text-lg font-medium text-slate-200">Amostra de posts (API)</h2>
           {err && (
             <div className="space-y-1">
-              <p className="text-xs text-amber-500">{err}</p>
+              <p className="text-xs text-amber-500">
+                Erro ao carregar mídias / dados iniciais desta conta: {err}
+              </p>
               {needsReconnect && (
                 <Link to="/connect" className="text-xs text-emerald-400 hover:underline">
                   Reconectar Meta agora
