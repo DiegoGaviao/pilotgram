@@ -3,9 +3,9 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
+from cors_middleware import PilotgramCORSMiddleware
 from database import init_db
 from routers import meta
 
@@ -30,14 +30,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Qualquer origem: o SPA pode estar em dhawk.com.br, Vercel ou localhost; o token Meta é só no servidor.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS manual: preflight OPTIONS + cabeçalhos em erro (evita "No Access-Control-Allow-Origin" no /brief PUT).
+app.add_middleware(PilotgramCORSMiddleware)
 
 app.include_router(meta.router)
 
@@ -57,7 +51,7 @@ async def health() -> dict:
         "public_api_base_configured": bool(settings.effective_public_api_base),
         "public_api_base": settings.effective_public_api_base or None,
         "openai_image_configured": bool((settings.openai_api_key or "").strip()),
-        "caption_engine_version": "post-ready-v3-cors-star-2026-04-01",
+        "caption_engine_version": "post-ready-v3-cors-mw-2026-04-01",
     }
 
 
