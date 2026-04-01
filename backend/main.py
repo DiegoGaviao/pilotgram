@@ -35,11 +35,14 @@ app = FastAPI(
 _DHAWK = frozenset({"https://www.dhawk.com.br", "https://dhawk.com.br"})
 _env = {o.strip() for o in settings.cors_origins.split(",") if o.strip()}
 _cors_origins = sorted(_env | _DHAWK)
+# allow_credentials=False: o token Meta fica só no servidor; o SPA usa fetch sem cookies.
+# True + cross-origin costuma apertar preflight e, em erros de rede/502 no Render, o browser
+# mostra "CORS" genérico quando a resposta nem traz cabeçalhos.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=r"^https://(www\.)?dhawk\.com\.br$",
-    allow_credentials=True,
+    allow_origin_regex=r"^https://([a-z0-9-]+\.)*dhawk\.com\.br$",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -122,6 +122,14 @@ function persistBriefLocal(ig: string, b: ProfileBrief) {
   }
 }
 
+/** GET /dna sem linha na BD devolve 200 com themes/updated_at vazios — aí pedimos refresh. */
+function dnaNeedsServerRefresh(d: ProfileDna | null): boolean {
+  if (!d) return true;
+  if ((d.themes?.length ?? 0) > 0) return false;
+  if ((d.updated_at ?? "").trim()) return false;
+  return true;
+}
+
 function humanActionError(msg: string): string {
   const m = msg.trim();
   if (
@@ -346,7 +354,7 @@ export default function Dashboard() {
 
         let dres = await api<ProfileDna>(`/api/v1/meta/ig/${ig}/dna`).catch(() => null);
         if (seq !== profileLoadSeq.current) return;
-        if (!dres && res.data.length > 0) {
+        if (dnaNeedsServerRefresh(dres) && res.data.length > 0) {
           dres = await api<ProfileDna>(`/api/v1/meta/ig/${ig}/dna/refresh`, {
             method: "POST",
           }).catch(() => null);

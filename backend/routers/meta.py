@@ -1070,7 +1070,15 @@ async def get_suggestions(ig_user_id: str) -> SuggestionListResponse:
 async def get_dna(ig_user_id: str) -> ProfileDnaResponse:
     row = await get_profile_dna(ig_user_id)
     if not row:
-        raise HTTPException(status_code=404, detail="DNA ainda não gerado para este perfil")
+        # 200 vazio: evita 404 ruidoso no console e o mesmo fluxo do front (.catch já engolia).
+        return ProfileDnaResponse(
+            ig_user_id=ig_user_id,
+            themes=[],
+            tone_hint="",
+            cta_hint="",
+            language_hint="pt",
+            updated_at="",
+        )
     return ProfileDnaResponse(
         ig_user_id=str(row["ig_user_id"]),
         themes=list(row.get("themes") or []),
