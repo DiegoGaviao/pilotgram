@@ -1142,7 +1142,9 @@ async def get_brief(ig_user_id: str, response: Response) -> ProfileBriefResponse
         "do_not_use_terms",
     ]
     data: dict[str, str] = {k: "" for k in keys}
-    updated_at = now
+    # Sem linha em pg_profile_brief: updated_at vazio → o front sabe que ainda não há PUT gravado
+    # (antes usávamos `now`, o que parecia “gravação nova” a cada GET e confundia merge com localStorage).
+    updated_at = ""
     if row:
         for k in keys:
             data[k] = str(row.get(k) or "").strip()

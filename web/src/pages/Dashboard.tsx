@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api, apiBase, creativePreviewUrl } from "../api";
 
@@ -65,6 +65,11 @@ function normalizePrefLang(s: string): "en" | "pt" | null {
 }
 
 function mergeBriefWithLocalStorage(ig: string, apiBrief: ProfileBrief): ProfileBrief {
+  const serverHasSavedRow = !!(apiBrief.updated_at ?? "").trim();
+  // Já existe questionário persistido (Supabase/SQLite): mostrar só o servidor — não misturar LS antigo.
+  if (serverHasSavedRow) {
+    return { ...apiBrief };
+  }
   let merged: ProfileBrief = { ...apiBrief };
   try {
     const raw = localStorage.getItem(briefLocalKey(ig));
@@ -260,6 +265,8 @@ export default function Dashboard() {
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const needsReconnect = !!err && err.startsWith("401:");
+  /** Só o último carregamento por IG aplica setState (evita Strict Mode / troca rápida de conta). */
+  const profileLoadSeq = useRef(0);
 
   useEffect(() => {
     void (async () => {
@@ -283,7 +290,7 @@ export default function Dashboard() {
       return;
     }
     const ig = selectedIg;
-    let cancelled = false;
+    const seq = ++profileLoadSeq.current;
 
     void (async () => {
       try {
@@ -291,22 +298,22 @@ export default function Dashboard() {
           api<{ data: MediaRow[] }>(`/api/v1/meta/ig/${ig}/media-with-insights?limit=8`),
           api<{ data: SuggestionRow[] }>(`/api/v1/meta/ig/${ig}/suggestions`),
         ]);
-        if (cancelled) return;
+        if (seq !== profileLoadSeq.current) return;
         setMedia(res.data);
         setSuggestions(sres.data);
 
         let dres = await api<ProfileDna>(`/api/v1/meta/ig/${ig}/dna`).catch(() => null);
-        if (cancelled) return;
+        if (seq !== profileLoadSeq.current) return;
         if (!dres && res.data.length > 0) {
           dres = await api<ProfileDna>(`/api/v1/meta/ig/${ig}/dna/refresh`, {
             method: "POST",
           }).catch(() => null);
         }
-        if (cancelled) return;
+        if (seq !== profileLoadSeq.current) return;
         setDna(dres);
 
         const bres = await api<ProfileBrief>(`/api/v1/meta/ig/${ig}/brief`).catch(() => null);
-        if (cancelled) return;
+        if (seq !== profileLoadSeq.current) return;
         const baseBrief: ProfileBrief =
           bres ?? {
             ig_user_id: ig,
@@ -322,10 +329,9 @@ export default function Dashboard() {
           };
         const mergedBrief = mergeBriefWithLocalStorage(ig, baseBrief);
         setBrief(mergedBrief);
-        persistBriefLocal(ig, mergedBrief);
         setErr(null);
       } catch (e) {
-        if (cancelled) return;
+        if (seq !== profileLoadSeq.current) return;
         setErr(e instanceof Error ? e.message : String(e));
         setMedia([]);
         setSuggestions([]);
@@ -333,10 +339,6 @@ export default function Dashboard() {
         setBrief(null);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [selectedIg]);
 
   async function generateSuggestions() {
@@ -533,7 +535,12 @@ export default function Dashboard() {
                 <p className="mb-2 text-[11px] text-slate-500">
                   Última gravação no servidor: {brief.updated_at}
                 </p>
-              ) : null}
+              ) : (
+                <p className="mb-2 text-[11px] text-slate-500">
+                  Ainda sem gravação deste questionário no servidor para este Instagram — ao guardar, passa a
+                  carregar sempre o último que gravaste.
+                </p>
+              )}
               {brief.updated_at && briefAllFieldsEmpty(brief) ? (
                 <p className="mb-2 text-[11px] text-sky-500/95">
                   A última gravação tinha todos os campos vazios (ou o servidor foi reiniciado e perdeu dados
