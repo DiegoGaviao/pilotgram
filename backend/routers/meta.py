@@ -329,6 +329,49 @@ def _detect_language(media_items: list[dict[str, Any]]) -> str:
     return "en" if en_score > pt_score else "pt"
 
 
+def _canonical_lang_from_brief_field(raw: str) -> str | None:
+    """Normaliza o campo preferred_language do questionário → 'en' | 'pt' | None (auto)."""
+    s = (raw or "").strip().lower().replace("_", "-")
+    if not s:
+        return None
+    if s in {"en", "english"} or s.startswith("en-") or s in {"ingles", "inglês", "inglés"}:
+        return "en"
+    if s in {"pt", "pt-br", "portuguese", "português", "portugues"} or s.startswith("pt-"):
+        return "pt"
+    if "english" in s or "ingl" in s:
+        return "en"
+    if "portug" in s:
+        return "pt"
+    return None
+
+
+def _canonical_lang_from_dna_hint(dna: dict[str, Any] | None) -> str | None:
+    h = str((dna or {}).get("language_hint") or "").strip().lower()
+    if h == "en":
+        return "en"
+    if h in {"pt", "pt-br"}:
+        return "pt"
+    return None
+
+
+def _resolve_caption_language(
+    brief: dict[str, Any] | None,
+    dna: dict[str, Any] | None,
+    ranked_media: list[dict[str, Any]],
+) -> tuple[str, str]:
+    """
+    Ordem: questionário (normalizado) → DNA → detecção nas legendas.
+    Devolve (lang, fonte) com fonte em brief | dna | detect.
+    """
+    from_brief = _canonical_lang_from_brief_field(str((brief or {}).get("preferred_language") or ""))
+    if from_brief:
+        return from_brief, "brief"
+    from_dna = _canonical_lang_from_dna_hint(dna)
+    if from_dna:
+        return from_dna, "dna"
+    return _detect_language(ranked_media), "detect"
+
+
 def _cta_by_lang(media_items: list[dict[str, Any]], lang: str) -> str:
     if lang == "en":
         return "CTA: comment with a keyword and I will send the details in DM."
@@ -575,13 +618,8 @@ def _build_suggestions_from_media(
     focused_media = _filter_media_by_focus(media_items, focus_topic)
     ranked = sorted(focused_media, key=score, reverse=True)
     top = ranked[: max(1, count)]
-    forced_lang = str((brief or {}).get("preferred_language") or "").strip().lower()
-    if forced_lang in {"en", "english"}:
-        lang = "en"
-    elif forced_lang in {"pt", "pt-br", "portuguese"}:
-        lang = "pt"
-    else:
-        lang = _detect_language(ranked)
+    lang, lang_source = _resolve_caption_language(brief, dna, ranked)
+    brief_lang_raw = str((brief or {}).get("preferred_language") or "").strip()
     focus_topic = _normalize_focus_for_lang(focus_topic, lang)
     keywords = _extract_keywords(ranked, limit=6)
     tone_hint = str(dna.get("tone_hint")) if dna else _tone_hint(ranked)
@@ -610,7 +648,7 @@ def _build_suggestions_from_media(
         objective = ""
     if _is_placeholder_brief(offer):
         offer = ""
-    if forced_lang in {"en", "english"} and _looks_portuguese(offer):
+    if lang == "en" and _looks_portuguese(offer):
         offer = ""
     blocked_terms = [
         t.strip().lower() for t in str((brief or {}).get("do_not_use_terms") or "").split(",") if t.strip()
@@ -659,7 +697,9 @@ def _build_suggestions_from_media(
                 "ig_user_id": ig_user_id,
                 "source_media_id": str(m.get("id") or ""),
                 "focus_topic_input": focus_topic,
-                "preferred_language": forced_lang or "(auto)",
+                "preferred_language": brief_lang_raw or "(auto)",
+                "caption_language_resolved": lang,
+                "caption_language_source": lang_source,
                 "brief": {
                     "niche": niche,
                     "target_audience": target,

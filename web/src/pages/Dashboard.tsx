@@ -55,6 +55,15 @@ function briefLocalKey(ig: string) {
   return `${BRIEF_LS_PREFIX}${ig}`;
 }
 
+function normalizePrefLang(s: string): "en" | "pt" | null {
+  const x = (s ?? "").trim().toLowerCase().replace(/_/g, "-");
+  if (!x) return null;
+  if (x === "en" || x === "english" || x.startsWith("en-")) return "en";
+  if (x.includes("ingl")) return "en";
+  if (x === "pt" || x === "pt-br" || x.startsWith("pt-") || x.includes("portug")) return "pt";
+  return null;
+}
+
 function mergeBriefWithLocalStorage(ig: string, apiBrief: ProfileBrief): ProfileBrief {
   let merged: ProfileBrief = { ...apiBrief };
   try {
@@ -74,6 +83,12 @@ function mergeBriefWithLocalStorage(ig: string, apiBrief: ProfileBrief): Profile
       const apiEmpty = !(merged[k] ?? "").trim();
       const locVal = (loc[k] ?? "").toString().trim();
       if (apiEmpty && locVal) merged = { ...merged, [k]: locVal };
+    }
+    // Idioma: se no browser está explícito (pt/en) e difere do servidor, prevalece o local — evita ficar preso a "pt" antigo do DNA.
+    const locLang = normalizePrefLang((loc.preferred_language ?? "").toString());
+    const apiLang = normalizePrefLang(merged.preferred_language);
+    if (locLang && (!apiLang || locLang !== apiLang)) {
+      merged = { ...merged, preferred_language: locLang };
     }
   } catch {
     /* ignore */
@@ -120,7 +135,7 @@ const BRIEF_HELP: Record<string, string> = {
   offer_summary:
     "O que você vende ou quer vender (nome + formato). Ex.: “mentoria 12 semanas”, “consultoria de anúncios”, “ebook + comunidade”. Ajuda a amarrar CTA e criativos.",
   preferred_language:
-    "Digite pt ou en. Define o idioma principal das legendas geradas. Deve bater com o público da conta.",
+    "Escolha o idioma das legendas. English força inglês mesmo se os posts forem em português. Auto usa o DNA e, se preciso, detecta pelas legendas.",
   tone_style:
     "Como você fala na marca: 2–5 palavras. Ex.: “acolhedor e direto”, “técnico sem jargão”, “provocador com humor leve”, “premium e calmo”.",
   do_not_use_terms:
@@ -516,7 +531,7 @@ export default function Dashboard() {
                     ["target_audience", "Público-alvo", "Quem você quer atingir"],
                     ["objective", "Objetivo principal", "Meta nos próximos 60–90 dias"],
                     ["offer_summary", "Oferta / serviço", "O que você vende ou oferece"],
-                    ["preferred_language", "Idioma (pt ou en)", "pt ou en"],
+                    ["preferred_language", "Idioma das legendas", ""],
                     ["tone_style", "Tom de voz", "Ex.: acolhedor, direto, premium"],
                   ] as const
                 ).map(([key, label, ph]) => (
@@ -525,14 +540,33 @@ export default function Dashboard() {
                       <span className="text-[11px] font-medium text-slate-400">{label}</span>
                       <BriefFieldHelp>{BRIEF_HELP[key]}</BriefFieldHelp>
                     </div>
-                    <input
-                      value={brief[key]}
-                      onChange={(e) =>
-                        setBrief({ ...brief, [key]: e.target.value } as ProfileBrief)
-                      }
-                      className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                      placeholder={ph}
-                    />
+                    {key === "preferred_language" ? (
+                      <select
+                        value={
+                          normalizePrefLang(brief.preferred_language) ?? ""
+                        }
+                        onChange={(e) =>
+                          setBrief({
+                            ...brief,
+                            preferred_language: e.target.value,
+                          } as ProfileBrief)
+                        }
+                        className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                      >
+                        <option value="">Auto (DNA / detectar dos posts)</option>
+                        <option value="pt">Português</option>
+                        <option value="en">English</option>
+                      </select>
+                    ) : (
+                      <input
+                        value={brief[key]}
+                        onChange={(e) =>
+                          setBrief({ ...brief, [key]: e.target.value } as ProfileBrief)
+                        }
+                        className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+                        placeholder={ph}
+                      />
+                    )}
                   </div>
                 ))}
               </div>

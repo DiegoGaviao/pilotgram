@@ -32,14 +32,23 @@ async def generate_caption_openai(
     if not (api_key or "").strip():
         return None
     lang_label = "English" if output_language == "en" else "Portuguese (Brazil)"
+    lang_lock = (
+        "LANGUAGE LOCK: Every word of the caption must be in English (US). "
+        "Do not use Portuguese, Spanish, or French. "
+        "If the inspiration excerpt below is in another language, translate ideas only — output stays English."
+        if output_language == "en"
+        else "LANGUAGE LOCK: Every word must be in Portuguese (Brazil). Do not use English sentences."
+    )
     system = (
         "You are a senior Instagram copywriter. Write ONE caption ready to post for followers. "
         "Never give instructions to the creator ('tell a story', 'name the habit'). "
         "Never expose internal business strategy. No template labels. "
-        f"Output 100% in {lang_label} only."
+        f"{lang_lock} "
+        f"Primary language label: {lang_label} only."
     )
     user = {
         "task": "Write one Instagram caption (hook + short body + natural CTA + 4-6 hashtags).",
+        "mandatory_output_language": lang_label,
         "rules": [
             "Speak directly to the reader in second person or inclusive 'we'.",
             "One concrete relatable situation + one clear actionable micro-shift.",
