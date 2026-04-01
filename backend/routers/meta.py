@@ -1125,8 +1125,10 @@ async def put_brief(ig_user_id: str, body: ProfileBriefBody) -> ProfileBriefResp
 
 
 @router.get("/ig/{ig_user_id}/brief", response_model=ProfileBriefResponse)
-async def get_brief(ig_user_id: str) -> ProfileBriefResponse:
+async def get_brief(ig_user_id: str, response: Response) -> ProfileBriefResponse:
     """Devolve o último briefing gravado; campos vazios são preenchidos com sugestões do DNA (posts recentes)."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
     row = await get_profile_brief(ig_user_id)
     dna = await get_profile_dna(ig_user_id)
     now = datetime.now(timezone.utc).isoformat()

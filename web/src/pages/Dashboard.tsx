@@ -84,10 +84,10 @@ function mergeBriefWithLocalStorage(ig: string, apiBrief: ProfileBrief): Profile
       const locVal = (loc[k] ?? "").toString().trim();
       if (apiEmpty && locVal) merged = { ...merged, [k]: locVal };
     }
-    // Idioma: se no browser está explícito (pt/en) e difere do servidor, prevalece o local — evita ficar preso a "pt" antigo do DNA.
+    // Idioma: o servidor manda (PUT gravou). Só usamos o local se a API não trouxe pt/en (ex.: rascunho offline).
     const locLang = normalizePrefLang((loc.preferred_language ?? "").toString());
     const apiLang = normalizePrefLang(merged.preferred_language);
-    if (locLang && (!apiLang || locLang !== apiLang)) {
+    if (locLang && !apiLang) {
       merged = { ...merged, preferred_language: locLang };
     }
   } catch {
@@ -106,6 +106,8 @@ function persistBriefLocal(ig: string, b: ProfileBrief) {
       preferred_language: b.preferred_language,
       tone_style: b.tone_style,
       do_not_use_terms: b.do_not_use_terms,
+      /** ISO do último GET/PUT — evita drift com cópia antiga no browser */
+      brief_server_updated_at: b.updated_at ?? "",
     };
     localStorage.setItem(briefLocalKey(ig), JSON.stringify(payload));
   } catch {
@@ -310,7 +312,9 @@ export default function Dashboard() {
             updated_at: "",
             filled_from_dna: false,
           };
-        setBrief(mergeBriefWithLocalStorage(selectedIg, baseBrief));
+        const mergedBrief = mergeBriefWithLocalStorage(selectedIg, baseBrief);
+        setBrief(mergedBrief);
+        persistBriefLocal(selectedIg, mergedBrief);
         setErr(null);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
