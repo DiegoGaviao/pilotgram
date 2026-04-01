@@ -34,7 +34,7 @@ from database import (
     upsert_profile_dna,
 )
 from services import meta_graph as graph
-from services import openai_image
+from services import openai_caption, openai_image
 
 logger = logging.getLogger(__name__)
 
@@ -343,6 +343,221 @@ def _tone_hint(media_items: list[dict[str, Any]]) -> str:
     )
 
 
+# Cenas mínimas só com objetos (reduz texto/UI/esoterismo no DALL·E). Inglês para o modelo de imagem.
+_SAFE_IMAGE_SCENES: list[str] = [
+    (
+        "Single photorealistic still life, square 1:1: closed laptop, matte ceramic coffee mug, "
+        "one green houseplant leaf at frame edge, pale wood desk, soft morning sidelight, "
+        "shallow depth of field, no people, no books, no frames, no phones, no posters, no wall art with glyphs."
+    ),
+    (
+        "Single photorealistic POV: sneakers on a quiet paved path, trees softly blurred, daylight, "
+        "neutral calm mood, no faces, no signage, no screens, no spiritual glow."
+    ),
+    (
+        "Single photorealistic detail: hands adjusting a simple wristwatch or sleeve, neutral clothing, "
+        "soft window light, tight crop, no text, no jewelry with symbols, no yoga pose."
+    ),
+    (
+        "Single photorealistic scene: ceramic mug and small plate on a kitchen counter, morning light, "
+        "minimal clutter, no packaging with readable labels, no books, no UI."
+    ),
+    (
+        "Single photorealistic interior: empty chair with a folded jacket, simple bag on floor nearby, "
+        "calm home office corner, daylight, no desk clutter with paper text, no frames on wall."
+    ),
+    (
+        "Single photorealistic outdoor: clear sky with soft clouds over a normal city roofline, "
+        "telephoto compression, mundane horizon, no monuments, no sacred architecture, no lens-flare sermon vibe."
+    ),
+]
+
+
+def _safe_creative_scene(idx: int) -> str:
+    return _SAFE_IMAGE_SCENES[idx % len(_SAFE_IMAGE_SCENES)]
+
+
+def _reader_facing_caption(
+    *,
+    lang: str,
+    angle: str,
+    cta_clean: str,
+    hashtags_block: str,
+    offer: str,
+    focus_topic: str,
+    focus: str,
+) -> str:
+    """Legenda pronta para o leitor — zero 'mini-roteiro' ou instruções ao criador."""
+    theme = (focus_topic or focus or "").strip()
+    if lang == "en":
+        bodies: dict[str, str] = {
+            "erro comum + correção prática": (
+                "You know that Sunday-night feeling? You swear Monday will be different — "
+                "then you open your phone for a second and forty minutes vanish.\n\n"
+                "The old loop: trying to fix everything with willpower alone.\n\n"
+                "The small shift: pick one 10-minute win before bed — lay out clothes, queue one task, "
+                "or write the first line of the thing you keep postponing. You wake up already ahead."
+            ),
+            "passo a passo em 3 etapas": (
+                "When growth work feels heavy, it is usually because you are planning, doing, and judging "
+                "in the same hour.\n\n"
+                "Try this: (1) dump what is actually on your mind in bullets — no editing; "
+                "(2) circle the one move that would make tomorrow easier; "
+                "(3) do only that for 15 minutes on a timer.\n\n"
+                "Tiny structure beats another motivational quote."
+            ),
+            "quebra de crença com prova/exemplo": (
+                "You probably do not need more discipline. You need less shame when you slip.\n\n"
+                "Most people I work with are not lazy — they are running on empty and still expecting "
+                "Olympic output.\n\n"
+                "When we shrink the next step until it feels almost silly, completion rate jumps. "
+                "Start embarrassingly small."
+            ),
+            "bastidores de caso real": (
+                "Real week snapshot: someone kept saying they had no time for content. "
+                "We looked at the calendar — the gap was not hours, it was decision fatigue.\n\n"
+                "Old habit: waiting for a perfect hour that never arrives.\n\n"
+                "Better move: 20 minutes, same slot daily, same simple template, ship something imperfect on purpose."
+            ),
+            "checklist de execução semanal": (
+                "Your weekly reset does not need a 90-minute life audit.\n\n"
+                "Quick checklist: one priority for work, one for health, one for relationships — "
+                "each with a single next action written like a text to a friend.\n\n"
+                "If it does not fit in one line, it is still too vague."
+            ),
+        }
+        hook_theme = theme or "self-help, coaching, and personal development"
+        default_body = (
+            f"If {hook_theme} is your world, here is a grounded take: stop collecting tips and start "
+            f"with one tiny repeatable action today — timer on, no debate, done beats perfect."
+        )
+    else:
+        bodies = {
+            "erro comum + correção prática": (
+                "Você conhece aquela sensação de domingo à noite? Você jura que segunda será diferente — "
+                "aí abre o celular ‘só um segundo’ e somem quarenta minutos.\n\n"
+                "O loop velho: tentar consertar tudo só na força de vontade.\n\n"
+                "O ajuste pequeno: escolher uma vitória de 10 minutos antes de dormir — separar roupa, "
+                "filar uma tarefa ou escrever a primeira linha daquilo que você adia. Você acorda já na frente."
+            ),
+            "passo a passo em 3 etapas": (
+                "Quando o trabalho de evolução pesa, normalmente é porque você mistura planejar, fazer "
+                "e julgar na mesma hora.\n\n"
+                "Teste: (1) jogue o que está na cabeça em bullets — sem editar; "
+                "(2) circule um passo que deixaria amanhã mais leve; "
+                "(3) faça só isso por 15 minutos, com timer.\n\n"
+                "Estrutura mínima ganha de mais um vídeo motivacional."
+            ),
+            "quebra de crença com prova/exemplo": (
+                "Você provavelmente não precisa de mais disciplina. Precisa de menos culpa quando escorrega.\n\n"
+                "A maioria das pessoas com quem trabalho não é preguiçosa — está no limite e ainda espera "
+                "rendimento de atleta.\n\n"
+                "Quando a gente encolhe o próximo passo até quase virar piada, a conclusão sobe rápido. "
+                "Começa ridículamente pequeno."
+            ),
+            "bastidores de caso real": (
+                "Bastidor da semana: alguém dizia que não tinha tempo pra conteúdo. Olhamos a agenda — "
+                "não faltava hora, faltava energia de decisão.\n\n"
+                "Hábito antigo: esperar a hora perfeita que nunca chega.\n\n"
+                "Ajuste: 20 minutos, mesmo horário todo dia, mesmo modelo simples, posta algo imperfeito de propósito."
+            ),
+            "checklist de execução semanal": (
+                "Seu reset semanal não precisa virar auditoria de vida.\n\n"
+                "Checklist rápido: uma prioridade pro trabalho, uma pra saúde, uma pros vínculos — "
+                "cada uma com uma próxima ação escrita como mensagem de texto.\n\n"
+                "Se não cabe em uma linha, ainda está vago demais."
+            ),
+        }
+        hook_theme = theme or "autoajuda, coaching e desenvolvimento pessoal"
+        default_body = (
+            f"Se {hook_theme} é o seu jogo, um caminho simples: pare de colecionar dicas e comece com "
+            f"uma ação minúscula repetível hoje — timer ligado, sem debate, feito vale mais que perfeito."
+        )
+    body = bodies.get(angle, default_body)
+    if offer:
+        o = _clean_sentence(offer)
+        if lang == "en":
+            body += f"\n\nIf this is the kind of shift you help people make, say it in one honest line: {o}."
+        else:
+            body += f"\n\nSe esse é o tipo de mudança que você ajuda a construir, diz numa linha honesta: {o}."
+    tail = []
+    if cta_clean:
+        tail.append(cta_clean)
+    if hashtags_block:
+        tail.append(hashtags_block)
+    suffix = "\n\n".join(tail) if tail else ""
+    return f"{body}\n\n{suffix}" if suffix else body
+
+
+async def _enrich_drafts_with_openai_captions(
+    draft: list[dict[str, Any]],
+    *,
+    brief: dict[str, Any] | None,
+    dna: dict[str, Any] | None,
+) -> None:
+    """Substitui legenda estática por copy gerada no Chat quando OPENAI_API_KEY está definida."""
+    api_key = (settings.openai_api_key or "").strip()
+    if not api_key:
+        return
+    niche = str((brief or {}).get("niche") or "").strip() or "coaching and mindset"
+    target = str((brief or {}).get("target_audience") or "").strip()
+    if _is_placeholder_brief(target):
+        target = ""
+    if not target:
+        first_lang = str(draft[0].get("language") or "pt") if draft else "pt"
+        target = (
+            "people building habits, clarity, and consistency"
+            if first_lang == "en"
+            else "pessoas construindo hábitos, clareza e consistência"
+        )
+    tone = str((brief or {}).get("tone_style") or "").strip() or "direct, warm, practical"
+    offer = str((brief or {}).get("offer_summary") or "").strip()
+    if _is_placeholder_brief(offer):
+        offer = ""
+    themes = [str(x).strip() for x in (dna or {}).get("themes") or [] if str(x).strip()][:8]
+    sem = asyncio.Semaphore(3)
+
+    async def one_row(d: dict[str, Any]) -> None:
+        async with sem:
+            lang = str(d.get("language") or "pt")
+            out_lang = "en" if lang == "en" else "pt"
+            trace = d.get("debug_trace") if isinstance(d.get("debug_trace"), dict) else {}
+            st2 = trace.get("stage_2_signals") if isinstance(trace.get("stage_2_signals"), dict) else {}
+            angle = str(st2.get("selected_angle") or "")
+            cta_raw = str(st2.get("cta_hint") or "")
+            cta_line = _clean_sentence(cta_raw.replace("CTA:", ""))
+            if not cta_line:
+                cta_line = (
+                    "Comenta uma palavra-chave e te chamo no DM."
+                    if out_lang != "en"
+                    else "Comment with a keyword and I will send the details in DM."
+                )
+            anchor = str(d.get("anchor_caption") or "")
+            focus_topic = str(d.get("focus_topic") or "")
+            cap = await openai_caption.generate_caption_openai(
+                api_key,
+                model=settings.openai_caption_model,
+                output_language=out_lang,
+                niche=niche,
+                target_audience=target,
+                tone_style=tone,
+                offer_summary=offer,
+                angle=angle,
+                focus_topic=focus_topic,
+                themes=themes,
+                anchor_post_excerpt=anchor,
+                cta_line=cta_line,
+            )
+            if cap:
+                d["suggestion_text"] = cap
+                st3 = trace.get("stage_3_outputs")
+                if isinstance(st3, dict):
+                    st3["caption_preview"] = cap[:280]
+                    st3["caption_source"] = "openai_chat"
+
+    await asyncio.gather(*[one_row(d) for d in draft])
+
+
 def _build_suggestions_from_media(
     ig_user_id: str,
     media_items: list[dict[str, Any]],
@@ -413,66 +628,32 @@ def _build_suggestions_from_media(
         angle = angles[idx % len(angles)]
         focus = ", ".join(keywords[:3]) if keywords else "tema principal do perfil"
         day = base_date + timedelta(days=idx * interval_days)
-        # Legenda final pronta para postar — sem rótulos internos ou mini-roteiro.
-        if lang == "en":
-            cta_clean = _clean_sentence(cta_hint.replace("CTA:", ""))
-            kws = [
-                k.strip().replace(" ", "")
-                for k in (keywords[:3] if keywords else ["mindset", "coaching", "growth"])
-                if k.strip()
-            ]
-            keyword_tags = " ".join([f"#{k}" for k in kws[:3]])
-            focus_tags = " ".join(
-                [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
+        cta_clean = _clean_sentence(cta_hint.replace("CTA:", ""))
+        kws = [
+            k.strip().replace(" ", "")
+            for k in (
+                keywords[:3]
+                if keywords
+                else (["mindset", "coaching", "growth"] if lang == "en" else ["mindset", "coaching", "evolucao"])
             )
-            # Não expor texto estratégico bruto do formulário (objetivo/comercial) na copy final.
-            hook = f"Here is a simple angle to unlock progress around {focus_topic or focus}."
-            middle = (
-                "Instead of repeating generic advice, tell one real situation your audience faces this week. "
-                "Name the old habit in one line, then show the better action with a concrete example."
-            )
-            if offer:
-                middle += f" Tie the lesson directly to what you offer: {_clean_sentence(offer)}."
-            caption_core = f"{hook}\n\n{middle}"
-            if cta_clean:
-                caption_core += f"\n\n{cta_clean}"
-            hashtags_block = (f"{keyword_tags} {focus_tags}").strip()
-            suggestion_text = caption_core if not hashtags_block else f"{caption_core}\n\n{hashtags_block}"
-        else:
-            cta_clean = _clean_sentence(cta_hint.replace("CTA:", ""))
-            kws = [
-                k.strip().replace(" ", "")
-                for k in (keywords[:3] if keywords else ["mindset", "coaching", "evolucao"])
-                if k.strip()
-            ]
-            keyword_tags = " ".join([f"#{k}" for k in kws[:3]])
-            focus_tags = " ".join(
-                [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
-            )
-            # Não expor texto estratégico bruto do formulário (objetivo/comercial) na copy final.
-            hook = f"Aqui vai um ângulo simples para destravar resultado em {focus_topic or focus}."
-            middle = (
-                "Em vez de conselho genérico, traga uma situação real que teu público vive nesta semana. "
-                "Mostra o hábito antigo em uma frase e, na sequência, a ação melhor com exemplo concreto."
-            )
-            if offer:
-                middle += f" Puxa o gancho naturalmente para a tua oferta: {_clean_sentence(offer)}."
-            caption_core = f"{hook}\n\n{middle}"
-            if cta_clean:
-                caption_core += f"\n\n{cta_clean}"
-            hashtags_block = (f"{keyword_tags} {focus_tags}").strip()
-            suggestion_text = caption_core if not hashtags_block else f"{caption_core}\n\n{hashtags_block}"
-        suggestion_text = clean_blocked(suggestion_text)
-        creative_prompt = (
-            f"Secular Instagram cover for {niche or focus_topic or focus}, angle {angle}, "
-            f"{'English-speaking' if lang == 'en' else 'Brazilian Portuguese'} audience, "
-            f"{'tone ' + tone_style + ', ' if tone_style else ''}"
-            f"everyday real-world scene (home, desk, walk, daylight), emotionally grounded, "
-            f"no esoteric or mystical visuals, no cosmic diagrams, no new-age spirituality, "
-            f"no religious symbols except Roman Catholic if faith is clearly part of the brand — otherwise fully secular. "
-            f"clean composition, mobile-friendly, {post_type.lower()} style, "
-            f"no words, no letters, no panel labels, no UI, no logos."
+            if k.strip()
+        ]
+        keyword_tags = " ".join([f"#{k}" for k in kws[:3]])
+        focus_tags = " ".join(
+            [f"#{t.replace(' ', '')}" for t in focus_topic.split(",")[:2] if t.strip()]
         )
+        hashtags_block = (f"{keyword_tags} {focus_tags}").strip()
+        suggestion_text = _reader_facing_caption(
+            lang=lang,
+            angle=angle,
+            cta_clean=cta_clean,
+            hashtags_block=hashtags_block,
+            offer=offer,
+            focus_topic=focus_topic,
+            focus=focus,
+        )
+        suggestion_text = clean_blocked(suggestion_text)
+        creative_prompt = _safe_creative_scene(idx)
         debug_trace = {
             "stage_1_inputs": {
                 "ig_user_id": ig_user_id,
@@ -498,6 +679,7 @@ def _build_suggestions_from_media(
             },
             "stage_3_outputs": {
                 "caption_preview": suggestion_text[:280],
+                "caption_source": "static_reader_v3",
                 "creative_prompt": creative_prompt,
             },
         }
@@ -513,6 +695,7 @@ def _build_suggestions_from_media(
                 "focus_topic": focus_topic or focus,
                 "language": lang,
                 "debug_trace": debug_trace,
+                "anchor_caption": str(m.get("caption") or "")[:900],
             }
         )
     if not out:
@@ -520,11 +703,25 @@ def _build_suggestions_from_media(
             {
                 "source_media_id": None,
                 "suggestion_text": (
-                    "Gancho: 3 erros comuns que travam teu perfil hoje.\n"
-                    "Roteiro: erro 1, erro 2, erro 3 + micro-solução de cada.\n"
-                    "CTA: comenta 'CHECKLIST' para receber o passo a passo."
+                    "Três erros silenciosos que travam consistência no Instagram:\n\n"
+                    "1) Você só posta quando “inspira” — e inspiração é evento raro.\n"
+                    "2) Você mistura planejar, produzir e julgar no mesmo bloco de tempo.\n"
+                    "3) Você espera perfeição antes de publicar.\n\n"
+                    "Troca mínima: 20 minutos no mesmo horário, mesmo formato, publicar algo simples e repetir.\n\n"
+                    "Comenta CHECKLIST que eu te mando o passo a passo no DM.\n\n"
+                    "#mindset #instagram #consistencia"
                 ),
                 "rationale": f"Fallback para IG {ig_user_id} sem mídias suficientes.",
+                "creative_prompt": _safe_creative_scene(0),
+                "creative_image_url": None,
+                "suggested_date": base_date.isoformat(),
+                "frequency_per_week": frequency_per_week,
+                "focus_topic": focus_topic or "consistência no Instagram",
+                "language": "pt",
+                "anchor_caption": "",
+                "debug_trace": {
+                    "stage_3_outputs": {"caption_source": "static_fallback"},
+                },
             }
         )
     return out
@@ -768,6 +965,7 @@ async def generate_suggestions(
         dna=dna_saved,
         brief=brief_saved,
     )
+    await _enrich_drafts_with_openai_captions(draft, brief=brief_saved, dna=dna_saved)
     public_base = settings.effective_public_api_base
     saved = await save_content_suggestions(ig_user_id, draft, public_api_base=public_base)
     if not public_base:

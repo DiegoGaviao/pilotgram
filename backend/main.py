@@ -62,7 +62,7 @@ async def health() -> dict:
         "public_api_base_configured": bool(settings.effective_public_api_base),
         "public_api_base": settings.effective_public_api_base or None,
         "openai_image_configured": bool((settings.openai_api_key or "").strip()),
-        "caption_engine_version": "post-ready-v2-2026-03-31",
+        "caption_engine_version": "post-ready-v3-2026-03-31",
     }
 
 

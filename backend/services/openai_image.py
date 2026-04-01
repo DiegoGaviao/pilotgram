@@ -35,13 +35,17 @@ STYLE_PRESETS: dict[str, str] = {
 _TEXT_AND_RELIGION_GUARDRAILS = (
     "TEXT BAN (strict): no readable text, no pseudo-text, no gibberish letters, no fake words, "
     "no alphabet characters, no numbers, no captions, no labels above panels, no signs, "
-    "no posters with writing, no book titles, no phone screens with UI, no floating typography. "
+    "no posters with writing, no book titles, no open books, no notebooks with visible lines as text, "
+    "no phone screens with UI, no floating typography. "
     "Do not draw comparison panels titled Old/New/Better or any English words on the image. "
+    "UI BAN: no Instagram logo, no camera app icon, no social network mockups, no split-screen collage, "
+    "no two-panel grid layout, no influencer dashboard, no metrics widgets. "
     "RELIGION (strict): no religious imagery except Roman Catholic Christian symbols when clearly appropriate; "
     "otherwise use zero religious symbols. "
     "Forbidden: Hindu/Buddhist/Sikh/New Age/Eastern guru or monk imagery, yoga-meditation guru aesthetics, "
     "mandala as spiritual symbol, prayer hall that looks generic cult, mystical cosmic wheels, "
-    "alchemical diagrams, golden occult circles, tarot, crystals as spiritual focus, incense-shrine vibes. "
+    "alchemical diagrams, golden occult circles, tarot, crystals as spiritual focus, incense-shrine vibes, "
+    "lotus pose meditation, heavy god-rays spiritual lighting. "
     "If faith appears at all, only neutral Roman Catholic context (e.g. simple crucifix in a real church) — "
     "when in doubt, keep the scene fully secular. "
 )
@@ -65,8 +69,8 @@ def build_image_prompt(
         "The caption was already written separately — this image must only illustrate the mood and topic visually, "
         "without repeating or labeling the message. "
         + _TEXT_AND_RELIGION_GUARDRAILS
-        + "Use everyday symbolic visuals: light through a window, hands on a blank notebook, walking outdoors, "
-        "one calm breath moment, organized desk with blank paper, sunrise on a normal city horizon. "
+        +         "Use everyday symbolic visuals: soft daylight on a wall, hands resting on a closed laptop, walking outdoors, "
+        "coffee on a plain table, simple coat on a chair, sunrise on a normal city horizon — mundane only. "
         "No logos, no watermarks. "
     )
     context = (

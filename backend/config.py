@@ -87,6 +87,10 @@ class Settings(BaseSettings):
         "dall-e-3",
         validation_alias=AliasChoices("PG_OPENAI_IMAGE_MODEL", "OPENAI_IMAGE_MODEL"),
     )
+    openai_caption_model: str = Field(
+        "gpt-4o-mini",
+        validation_alias=AliasChoices("PG_OPENAI_CAPTION_MODEL", "OPENAI_CAPTION_MODEL"),
+    )
 
     @property
     def effective_public_api_base(self) -> str:
