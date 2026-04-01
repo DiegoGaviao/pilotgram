@@ -1031,7 +1031,17 @@ async def generate_suggestions(
                     await update_suggestion_creative_image_url(int(row["id"]), url)
                     row["creative_image_url"] = url
 
-        await asyncio.gather(*[enhance_creative(r) for r in saved])
+        # Várias imagens DALL·E + Render/proxy timeout: devolver JSON com legendas mesmo que parte das imagens falhe ou atrase.
+        _img_tasks = [enhance_creative(r) for r in saved]
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*_img_tasks, return_exceptions=True),
+                timeout=240.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "OpenAI image batch aborted after 240s — suggestions returned; some creatives may be SVG fallback only."
+            )
 
     normalized = [_normalize_suggestion_creative_url(s) for s in saved]
     if debug:
