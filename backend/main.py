@@ -3,9 +3,9 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from cors_middleware import PilotgramCORSMiddleware
 from database import init_db
 from routers import meta
 
@@ -30,8 +30,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS manual: preflight OPTIONS + cabeçalhos em erro (evita "No Access-Control-Allow-Origin" no /brief PUT).
-app.add_middleware(PilotgramCORSMiddleware)
+# União com os dois hostnames Dhawk: no Render, PG_CORS_ORIGINS às vezes fica só com www
+# e o browser em https://dhawk.com.br bloqueia com "No Access-Control-Allow-Origin".
+_DHAWK = frozenset({"https://www.dhawk.com.br", "https://dhawk.com.br"})
+_env = {o.strip() for o in settings.cors_origins.split(",") if o.strip()}
+_cors_origins = sorted(_env | _DHAWK)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_origin_regex=r"^https://(www\.)?dhawk\.com\.br$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(meta.router)
 
@@ -51,7 +62,7 @@ async def health() -> dict:
         "public_api_base_configured": bool(settings.effective_public_api_base),
         "public_api_base": settings.effective_public_api_base or None,
         "openai_image_configured": bool((settings.openai_api_key or "").strip()),
-        "caption_engine_version": "post-ready-v3-cors-mw-2026-04-01",
+        "caption_engine_version": "post-ready-v3-cors-restored-2026-04-01",
     }
 
 
