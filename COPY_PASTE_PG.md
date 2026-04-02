@@ -122,7 +122,7 @@ VITE_PG_SUPABASE_ANON_KEY=
 
 ## Checklist — tudo o que o produto assume (para “funcionar tudo”)
 
-1. **API no Render** deployada do `main`; `GET /health` com `caption_engine_version` = `post-ready-v3-unified-2026-04-01` (ou mais recente).
+1. **API no Render** deployada do `main`; `GET /health` com `caption_engine_version` = `post-ready-v3-generate-hardening-2026-03-31` (ou mais recente).
 2. **CORS:** API com `allow_origins=["*"]` e `allow_credentials=False`; front com `fetch` **sem** cookies (`credentials: omit` em `web/src/api.ts`). O token Meta **não** vai no browser.
 3. **Front no Hostinger:** `npm run build` com `VITE_PG_API_URL=https://pilotgram.onrender.com` (ou a URL real da API, sem barra final).
 4. **Supabase:** tabelas `pg_oauth_solo` + `pg_profile_brief`; variáveis `PG_SUPABASE_*` ou `SUPABASE_*` no Render.

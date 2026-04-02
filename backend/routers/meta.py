@@ -15,7 +15,7 @@ from typing import Any, Optional
 from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import APIRouter, HTTPException, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from config import settings
 from database import (
@@ -92,6 +92,8 @@ class PageIgItem(BaseModel):
 
 
 class SuggestionItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     id: int
     ig_user_id: str
     source_media_id: str | None = None
@@ -561,44 +563,50 @@ async def _enrich_drafts_with_openai_captions(
     sem = asyncio.Semaphore(3)
 
     async def one_row(d: dict[str, Any]) -> None:
-        async with sem:
-            lang = str(d.get("language") or "pt")
-            out_lang = "en" if lang == "en" else "pt"
-            trace = d.get("debug_trace") if isinstance(d.get("debug_trace"), dict) else {}
-            st2 = trace.get("stage_2_signals") if isinstance(trace.get("stage_2_signals"), dict) else {}
-            angle = str(st2.get("selected_angle") or "")
-            cta_raw = str(st2.get("cta_hint") or "")
-            cta_line = _clean_sentence(cta_raw.replace("CTA:", ""))
-            if not cta_line:
-                cta_line = (
-                    "Comenta uma palavra-chave e te chamo no DM."
-                    if out_lang != "en"
-                    else "Comment with a keyword and I will send the details in DM."
+        try:
+            async with sem:
+                lang = str(d.get("language") or "pt")
+                out_lang = "en" if lang == "en" else "pt"
+                trace = d.get("debug_trace") if isinstance(d.get("debug_trace"), dict) else {}
+                st2 = trace.get("stage_2_signals") if isinstance(trace.get("stage_2_signals"), dict) else {}
+                angle = str(st2.get("selected_angle") or "")
+                cta_raw = str(st2.get("cta_hint") or "")
+                cta_line = _clean_sentence(cta_raw.replace("CTA:", ""))
+                if not cta_line:
+                    cta_line = (
+                        "Comenta uma palavra-chave e te chamo no DM."
+                        if out_lang != "en"
+                        else "Comment with a keyword and I will send the details in DM."
+                    )
+                anchor = str(d.get("anchor_caption") or "")
+                focus_topic = str(d.get("focus_topic") or "")
+                cap = await openai_caption.generate_caption_openai(
+                    api_key,
+                    model=settings.openai_caption_model,
+                    output_language=out_lang,
+                    niche=niche,
+                    target_audience=target,
+                    tone_style=tone,
+                    offer_summary=offer,
+                    angle=angle,
+                    focus_topic=focus_topic,
+                    themes=themes,
+                    anchor_post_excerpt=anchor,
+                    cta_line=cta_line,
                 )
-            anchor = str(d.get("anchor_caption") or "")
-            focus_topic = str(d.get("focus_topic") or "")
-            cap = await openai_caption.generate_caption_openai(
-                api_key,
-                model=settings.openai_caption_model,
-                output_language=out_lang,
-                niche=niche,
-                target_audience=target,
-                tone_style=tone,
-                offer_summary=offer,
-                angle=angle,
-                focus_topic=focus_topic,
-                themes=themes,
-                anchor_post_excerpt=anchor,
-                cta_line=cta_line,
-            )
-            if cap:
-                d["suggestion_text"] = cap
-                st3 = trace.get("stage_3_outputs")
-                if isinstance(st3, dict):
-                    st3["caption_preview"] = cap[:280]
-                    st3["caption_source"] = "openai_chat"
+                if cap:
+                    d["suggestion_text"] = cap
+                    st3 = trace.get("stage_3_outputs")
+                    if isinstance(st3, dict):
+                        st3["caption_preview"] = cap[:280]
+                        st3["caption_source"] = "openai_chat"
+        except Exception:
+            logger.exception("OpenAI caption enrichment skipped for one row (static caption kept)")
 
-    await asyncio.gather(*[one_row(d) for d in draft])
+    results = await asyncio.gather(*[one_row(d) for d in draft], return_exceptions=True)
+    for r in results:
+        if isinstance(r, Exception):
+            logger.warning("OpenAI caption task ended with: %s", r)
 
 
 def _build_suggestions_from_media(
@@ -1005,7 +1013,10 @@ async def generate_suggestions(
         dna=dna_saved,
         brief=brief_saved,
     )
-    await _enrich_drafts_with_openai_captions(draft, brief=brief_saved, dna=dna_saved)
+    try:
+        await _enrich_drafts_with_openai_captions(draft, brief=brief_saved, dna=dna_saved)
+    except Exception:
+        logger.exception("OpenAI caption enrichment failed; using static captions only")
     public_base = settings.effective_public_api_base
     saved = await save_content_suggestions(ig_user_id, draft, public_api_base=public_base)
     if not public_base:
@@ -1017,31 +1028,28 @@ async def generate_suggestions(
         sem = asyncio.Semaphore(2)
 
         async def enhance_creative(row: dict) -> None:
-            async with sem:
-                creative_prompt = str(row.get("creative_prompt") or "")
-                caption_text = str(row.get("suggestion_text") or "")
-                url = await openai_image.generate_image_url(
-                    settings.openai_api_key,
-                    creative_prompt,
-                    caption=caption_text,
-                    style=image_style,
-                    model=settings.openai_image_model,
+            try:
+                async with sem:
+                    creative_prompt = str(row.get("creative_prompt") or "")
+                    caption_text = str(row.get("suggestion_text") or "")
+                    url = await openai_image.generate_image_url(
+                        settings.openai_api_key,
+                        creative_prompt,
+                        caption=caption_text,
+                        style=image_style,
+                        model=settings.openai_image_model,
+                    )
+                    if url:
+                        await update_suggestion_creative_image_url(int(row["id"]), url)
+                        row["creative_image_url"] = url
+            except Exception:
+                logger.exception(
+                    "OpenAI image skipped for suggestion id=%s (caption still returned)",
+                    row.get("id"),
                 )
-                if url:
-                    await update_suggestion_creative_image_url(int(row["id"]), url)
-                    row["creative_image_url"] = url
 
-        # Várias imagens DALL·E + Render/proxy timeout: devolver JSON com legendas mesmo que parte das imagens falhe ou atrase.
-        _img_tasks = [enhance_creative(r) for r in saved]
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*_img_tasks, return_exceptions=True),
-                timeout=240.0,
-            )
-        except asyncio.TimeoutError:
-            logger.warning(
-                "OpenAI image batch aborted after 240s — suggestions returned; some creatives may be SVG fallback only."
-            )
+        # Imagens em paralelo: falha numa linha não derruba o POST nem bloqueia o retorno das legendas.
+        await asyncio.gather(*[enhance_creative(r) for r in saved])
 
     normalized = [_normalize_suggestion_creative_url(s) for s in saved]
     if debug:
@@ -1055,7 +1063,14 @@ async def generate_suggestions(
                 caption=str(row.get("suggestion_text") or ""),
                 style=image_style,
             )
-    return SuggestionGenerateResponse(generated=len(normalized), data=[SuggestionItem(**s) for s in normalized])
+    out_items: list[SuggestionItem] = []
+    for s in normalized:
+        try:
+            out_items.append(SuggestionItem.model_validate(s))
+        except ValidationError:
+            logger.exception("Suggestion row failed validation: %s", s)
+            raise HTTPException(status_code=500, detail="Falha ao montar resposta das sugestões.") from None
+    return SuggestionGenerateResponse(generated=len(normalized), data=out_items)
 
 
 def _normalize_suggestion_creative_url(row: dict[str, Any]) -> dict[str, Any]:
